@@ -1,0 +1,63 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=Oswald:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; background: #f4eee0; font-family: 'Courier Prime', 'Courier New', monospace; color: #23292d; }
+    a { color: #b5402c; } a:hover { color: #8f3222; }
+  </style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; padding: 28px 20px 20px 20px; background-color: #f4eee0; background-image: repeating-linear-gradient(0deg, transparent 0px, transparent 27px, rgba(35,41,45,0.05) 27px, rgba(35,41,45,0.05) 28px); display: flex; flex-direction: column; gap: 22px; overflow: hidden;">
+
+  <div style="display: flex; flex-direction: row; justify-content: space-between; align-items: baseline; border-bottom: 2px solid #23292d; padding-bottom: 8px;">
+    <span style="font-family: 'Oswald', 'Arial Narrow', sans-serif; font-size: 28px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em;">Season</span>
+    <span style="font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: #6b6f6a;">After game 6</span>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 0px;">
+    <div style="display: flex; flex-direction: row; justify-content: space-between; align-items: baseline; padding-bottom: 6px;">
+      <span style="font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase;">Standings</span>
+    </div>
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 30px 30px 36px 44px 56px; gap: 0px; font-size: 11px; color: #6b6f6a; padding: 4px 0; border-top: 1px solid #23292d; border-bottom: 1px solid #cdc4ad; text-align: right;">
+      <span style="text-align: left;"></span><span>W</span><span>L</span><span>GB</span><span>RD</span><span>L5</span>
+    </div>
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 30px 30px 36px 44px 56px; gap: 0px; font-size: 13px; padding: 7px 0; border-bottom: 1px solid #cdc4ad; text-align: right;"><span style="text-align: left;">Pilots</span><span>5</span><span>1</span><span>—</span><span>+14</span><span>WWWLW</span></div>
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 30px 30px 36px 44px 56px; gap: 0px; font-size: 13px; padding: 7px 0; border-bottom: 1px solid #cdc4ad; text-align: right; font-weight: 700; color: #b5402c;"><span style="text-align: left;">Herons</span><span>4</span><span>2</span><span>1</span><span>+6</span><span>WLWWL</span></div>
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 30px 30px 36px 44px 56px; gap: 0px; font-size: 13px; padding: 7px 0; border-bottom: 1px solid #cdc4ad; text-align: right;"><span style="text-align: left;">Cranes</span><span>4</span><span>2</span><span>1</span><span>+9</span><span>LWWWL</span></div>
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 30px 30px 36px 44px 56px; gap: 0px; font-size: 13px; padding: 7px 0; border-bottom: 1px solid #cdc4ad; text-align: right;"><span style="text-align: left;">Miners</span><span>3</span><span>3</span><span>2</span><span>−2</span><span>WLLWL</span></div>
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 30px 30px 36px 44px 56px; gap: 0px; font-size: 13px; padding: 7px 0; border-bottom: 1px solid #cdc4ad; text-align: right;"><span style="text-align: left;">Foxes</span><span>2</span><span>4</span><span>3</span><span>−8</span><span>LLWLL</span></div>
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 30px 30px 36px 44px 56px; gap: 0px; font-size: 13px; padding: 7px 0; border-bottom: 1px solid #cdc4ad; text-align: right;"><span style="text-align: left;">Kilns</span><span>2</span><span>4</span><span>3</span><span>−7</span><span>LWLLW</span></div>
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 30px 30px 36px 44px 56px; gap: 0px; font-size: 13px; padding: 7px 0; border-bottom: 1px solid #23292d; text-align: right;"><span style="text-align: left;">Otters</span><span>1</span><span>5</span><span>4</span><span>−12</span><span>LLLWL</span></div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 0px;">
+    <div style="display: flex; flex-direction: row; justify-content: space-between; align-items: baseline; padding-bottom: 6px;">
+      <span style="font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase;">Herons batting</span>
+      <span style="font-size: 11px; color: #6b6f6a;">tap a column to sort</span>
+    </div>
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 50px 34px 40px 50px; gap: 0px; font-size: 11px; color: #6b6f6a; padding: 4px 0; border-top: 1px solid #23292d; border-bottom: 1px solid #cdc4ad; text-align: right;">
+      <span style="text-align: left;"></span><span style="color: #b5402c; font-weight: 700;">AVG</span><span>HR</span><span>RBI</span><span>OBP</span>
+    </div>
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 50px 34px 40px 50px; gap: 0px; font-size: 13px; padding: 7px 0; border-bottom: 1px solid #cdc4ad; text-align: right;"><span style="text-align: left;">Villanueva 2B</span><span>.333</span><span>0</span><span>4</span><span>.385</span></div>
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 50px 34px 40px 50px; gap: 0px; font-size: 13px; padding: 7px 0; border-bottom: 1px solid #cdc4ad; text-align: right;"><span style="text-align: left;">Achterberg RF</span><span>.281</span><span>4</span><span>9</span><span>.353</span></div>
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 50px 34px 40px 50px; gap: 0px; font-size: 13px; padding: 7px 0; border-bottom: 1px solid #cdc4ad; text-align: right;"><span style="text-align: left;">Okafor CF</span><span>.276</span><span>1</span><span>3</span><span>.400</span></div>
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 50px 34px 40px 50px; gap: 0px; font-size: 13px; padding: 7px 0; border-bottom: 1px solid #cdc4ad; text-align: right;"><span style="text-align: left;">Ferreira 3B</span><span>.250</span><span>2</span><span>6</span><span>.310</span></div>
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 50px 34px 40px 50px; gap: 0px; font-size: 13px; padding: 7px 0; border-bottom: 1px solid #cdc4ad; text-align: right;"><span style="text-align: left;">Wrona 1B</span><span>.208</span><span>5</span><span>11</span><span>.259</span></div>
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 50px 34px 40px 50px; gap: 0px; font-size: 13px; padding: 7px 0; border-bottom: 1px solid #cdc4ad; text-align: right; color: #6b6f6a;"><span style="text-align: left;">4 more…</span><span></span><span></span><span></span><span></span></div>
+  </div>
+
+  <div style="margin-top: auto; display: flex; flex-direction: row; align-items: center; gap: 8px; min-height: 44px; font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; border-top: 1px solid #cdc4ad; padding-top: 14px;">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#23292d" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"></path></svg>
+    <span>Back</span>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

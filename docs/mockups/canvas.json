@@ -1,0 +1,15 @@
+{
+  "artboards": [
+    { "file": "Home.dc.html",    "title": "1 · Home",             "x": 0,    "y": 0,    "w": 390, "h": 844 },
+    { "file": "Main.dc.html",    "title": "2 · At bat",           "x": 480,  "y": 0,    "w": 390, "h": 844 },
+    { "file": "Between.dc.html", "title": "3 · Between innings",  "x": 960,  "y": 0,    "w": 390, "h": 844 },
+    { "file": "Season.dc.html",  "title": "4 · Season",           "x": 1440, "y": 0,    "w": 390, "h": 844 },
+    { "file": "DirectionScoreboard.dc.html", "title": "Alt B · Scoreboard", "x": 480,  "y": 1040, "w": 390, "h": 844 },
+    { "file": "DirectionBroadsheet.dc.html", "title": "Alt C · Broadsheet", "x": 960,  "y": 1040, "w": 390, "h": 844 }
+  ],
+  "annotations": [
+    { "id": "flow-note", "x": 0, "y": -150, "w": 420, "text": "Short Season — Scorecard direction. Static mockups of the four v1 screens, left to right in the order a break plays out: Home → At bat → Between innings → Season. Sample game state throughout (Herons vs Otters, bottom 4th)." },
+    { "id": "alt-note", "x": 0, "y": 1040, "w": 400, "text": "Alternates, low-fi. Same at-bat screen in two other directions, in case Scorecard is not to your taste. B: dark LED scoreboard. C: newspaper box score. Pick one and the other screens get rebuilt to match." }
+  ],
+  "launch": { "view": "canvas" }
+}
