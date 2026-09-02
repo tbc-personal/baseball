@@ -36,7 +36,7 @@ notifications, realism beyond "the numbers look like baseball numbers".
 
 ```
 Break 1:  Home → play Top 1 (you bat if away) or Bottom 1 → summary → close
-Break 2:  Home shows "Bottom 3rd, Herons 2 – Otters 1. Play the 3rd" → ...
+Break 2:  Home shows "Bottom 3rd, Herons 2 – Wrens 1. Play the 3rd" → ...
 ...
 Game ends after 9 innings (extra innings if tied). Season is 20 games.
 ```
@@ -239,24 +239,29 @@ by game number.
 
 ### 5.2 Opponents
 
-Six teams. Each has a strength that sets its hitters' ratings (all nine
+Every team in the league is a bird. Six opponents. Each has a strength that sets its hitters' ratings (all nine
 hitters share the team's three numbers in v1; individual names are flavor
 only) and two starting pitchers alternated by game.
 
 | Team | C | P | E | Pitcher A (K/S/tend) | Pitcher B (K/S/tend) |
 |---|---|---|---|---|---|
-| Ashford Otters | 45 | 45 | 45 | 50/45/Neutral | 45/50/Nibbler |
-| Bellweather Kilns | 50 | 55 | 45 | 55/55/Attacker | 50/50/Neutral |
-| Copper Hill Miners | 55 | 50 | 50 | 60/50/Attacker | 50/60/Neutral |
-| Silver Lake Foxes | 50 | 50 | 55 | 45/60/Nibbler | 55/50/Neutral |
+| Ashford Wrens | 45 | 45 | 45 | 50/45/Neutral | 45/50/Nibbler |
+| Bellweather Grackles | 50 | 55 | 45 | 55/55/Attacker | 50/50/Neutral |
+| Copper Hill Kestrels | 55 | 50 | 50 | 60/50/Attacker | 50/60/Neutral |
+| Silver Lake Loons | 50 | 50 | 55 | 45/60/Nibbler | 55/50/Neutral |
 | Marrow Creek Cranes | 55 | 60 | 50 | 60/60/Attacker | 55/55/Nibbler |
-| Port Ellery Pilots | 60 | 55 | 60 | 65/65/Attacker | 60/60/Neutral |
+| Port Ellery Ospreys | 60 | 55 | 60 | 65/65/Attacker | 60/60/Neutral |
 
 Listed weakest to strongest. The schedule front-loads the weak teams.
 
+Suggested league name, composed and flagged for your review: **the Flyway
+League** (a flyway is a migration route; a small nod to the birds without
+being cute about it). It appears in one place, the home screen masthead,
+so it is cheap to change.
+
 ### 5.3 Schedule
 
-20 games: Otters ×4, Kilns ×4, Miners ×3, Foxes ×3, Cranes ×3, Pilots ×3,
+20 games: Wrens ×4, Grackles ×4, Kestrels ×3, Loons ×3, Cranes ×3, Ospreys ×3,
 interleaved so no opponent appears twice in a row, home/away alternating.
 Other teams' games against each other are simulated by strength (a single
 roll per game, p(win) from the Contact+Power+Eye sum difference) so the
@@ -283,7 +288,7 @@ player is slightly better than the sim.
 - **Season stats** per batter: PA, AB, H, 2B, 3B, HR, BB, K, R, RBI, AVG,
   OBP, SLG. Shown on the season screen, sorted by your choice of column.
 - **Standings**: W-L, GB, run differential, last five.
-- **Season log**: one line per game (`G7 vs Foxes W 5–3`).
+- **Season log**: one line per game (`G7 vs Loons W 5–3`).
 - **Milestones**: a small fixed list, shown once as a line on the
   between-innings screen when hit. First HR, first walk-off, first shutout,
   10-game mark, clinch/eliminated, season over. No badges screen.
@@ -292,8 +297,68 @@ player is slightly better than the sim.
 
 Persistence: whole `GameState` to localStorage after every engine
 transition. Save schema carries a version integer and a `migrate()`
-function. Settings screen has "Copy save as text" / "Paste save" for moving
-devices, and "Reset season" behind a confirm.
+function. Settings screen has "Copy save code" / "Paste save code" for
+moving between devices, and "Reset season" behind a confirm.
+
+### 6.1 Save code (cross-device transfer)
+
+There is no backend, so moving a season from laptop to phone is a
+copy-and-paste of one short text string. Design goals: short enough to
+paste into Notes or a message to yourself, self-describing, safe against a
+truncated paste, and forward-compatible with schema migrations.
+
+**Format**
+
+```
+SS1-<payload>-<check>
+```
+
+| Part | Meaning |
+|---|---|
+| `SS1` | Magic prefix and container version. `SS1` = deflate + base64url. A future `SS2` can change the container without touching the schema |
+| `payload` | `base64url( deflate-raw( JSON.stringify(envelope) ) )`, no padding |
+| `check` | 4 hex chars: FNV-1a 32-bit of the payload string, low 16 bits. Catches truncated or mangled pastes before inflate runs |
+
+The envelope, before compression:
+
+```json
+{ "v": 1, "savedAt": "2026-09-02T14:31:07Z", "device": "iPhone", "state": { ...GameState } }
+```
+
+`v` is the save-schema version that `migrate()` understands; `device` is a
+free-text label the user can set in Settings (default: coarse user-agent
+family) so the paste preview can say where the save came from.
+
+**Size.** A mid-season `GameState` with full per-player stat lines is
+roughly 4–6 KB of JSON and compresses to about 1–1.5 KB, so the code is
+around 1.5–2 KB of text. That pastes cleanly into any messaging app.
+
+**Compression** uses the browser `CompressionStream("deflate-raw")` API,
+available in Safari 16.4+, Chrome 80+, Firefox 113+. If it is missing, the
+exporter falls back to `SS0-` (base64url of the raw JSON, same checksum,
+roughly 3× longer) and the importer accepts both.
+
+**Export flow.** Settings → "Copy save code" copies to the clipboard and
+also shows the code in a selectable box, because iOS clipboard writes can
+fail silently outside a user gesture. The box shows the first and last few
+characters and a length so the user can eyeball that a paste is complete.
+
+**Import flow.** Settings → paste into the box → the app decodes without
+applying and shows a preview line: `Game 7 · Herons 4–2 · bottom 4th · saved
+2 hours ago on iPhone`. If the pasted save is *older* than the local one,
+the preview says so in red. "Load this save" replaces local state after a
+confirm. The replaced local state is stashed under a second localStorage
+key for one session so "Undo load" works once.
+
+**Failure messages** are specific: bad prefix, checksum mismatch (with
+"looks truncated: N chars" when the length is short), schema too new
+("this save is from a newer version of the game; update this device").
+Never throw a raw error at the user.
+
+**Tests (T6):** round-trip a fresh, a mid-game, and an end-of-season state;
+truncation by 1, 10, and 200 chars fails the checksum; a hand-edited
+`savedAt` older than local triggers the warning; `v: 0` is migrated; `v: 99`
+is refused with the "newer version" message.
 
 ---
 
@@ -335,10 +400,9 @@ layout and looks like a small game rather than a stretched web page.
    card with ratings, pitcher read, choice buttons, last play in words.
 3. **Between innings.** Your half in plays, the opponent's half in two
    lines, updated line score, "Play the next inning" / "Done for now".
-4. **Season.** Standings and your batting table, tabs.
-
-Settings is a small sheet off the home screen: export/import save, reset,
-team name.
+4. **Season.** Standings and your batting table.
+5. **Settings / Transfer.** A sheet off the home screen: team name, copy
+   save code, paste save code with preview, reset season.
 
 ### Visual direction
 

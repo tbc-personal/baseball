@@ -10,6 +10,7 @@ Live canvas (pan/zoom, PNG/PDF export): https://claude.ai/code/artifact/d6c4bade
 | `Main.dc.html` | At-bat (the core loop) |
 | `Between.dc.html` | Between innings |
 | `Season.dc.html` | Standings and batting |
+| `Transfer.dc.html` | Settings, save-code export and import |
 | `DirectionScoreboard.dc.html` | Alternate direction B, low-fi |
 | `DirectionBroadsheet.dc.html` | Alternate direction C, low-fi |
 | `canvas.json` | Canvas layout |

@@ -25,7 +25,7 @@ add it to the iPhone home screen. Do not start with a native iOS app.**
 | Build expiry | Never | TestFlight builds expire after 90 days; you'd re-upload every quarter for a solo game |
 | Install | "Add to Home Screen" in Safari (one time) | TestFlight app + invite |
 | Offline | Yes, with a service worker | Yes |
-| Save data | localStorage / IndexedDB on the device | On-device, plus iCloud if built |
+| Save data | localStorage on the device, plus a copy-paste save code for moving between devices (GAME_DESIGN.md §6.1) | On-device, plus iCloud if built |
 | Haptics, native feel | Limited | Better |
 
 The use case ("short breaks between work meetings") is mostly a laptop
@@ -45,20 +45,30 @@ not a rewrite. Nothing in the plan below forecloses it.
 - No push notifications needed; none planned.
 - Safari's PWA install flow is manual (Share → Add to Home Screen). Once.
 
-### Hosting
+### Hosting: GitHub Pages, with the repo set to public
 
-The repo is **private**. That rules out free GitHub Pages (GitHub Pages on
-private repos requires GitHub Pro or a Team plan).
+GitHub Pages is free for **public** repositories on every plan. For a
+private repo it needs GitHub Pro or Team. So: flip the repo to public and
+deploy with GitHub Pages. Everything stays on GitHub, no second account,
+and deploys run from a workflow in this repo.
 
-- **Recommended: Cloudflare Pages.** Free, deploys from a private GitHub
-  repo on push, gives a `*.pages.dev` URL with HTTPS, no server to run.
-  Setup is a five-minute one-time click-through that you must do (it
-  needs your Cloudflare login). After that, every push to `main` deploys.
-- Fallback: Netlify (same model), or GitHub Pages if you already pay for
-  GitHub Pro. Either way the app is a static folder; hosting is swappable.
+What going public means in practice:
 
-The site is public-by-URL but unlisted. The game holds no personal data
-and there is no backend, so that is fine.
+- The source is visible to anyone. There is nothing sensitive in it: no
+  backend, no secrets, no personal data, fictional rosters.
+- The game URL is `https://tbc-personal.github.io/baseball/`. Anyone with
+  the link can play. Their saves live in their own browser; nothing is
+  shared.
+- The Vite config needs `base: '/baseball/'` so asset paths resolve under
+  the repo subpath. The PWA manifest's `start_url` and `scope` need the
+  same prefix. Ticket T10 covers both.
+- Deploy is the standard `actions/deploy-pages` workflow: build on push to
+  `main`, upload `dist/`, publish. Pages must be enabled once in the repo
+  settings with source set to "GitHub Actions". That one click is yours.
+
+Fallback if you would rather keep the repo private: Cloudflare Pages,
+free, deploys from private repos, needs a Cloudflare account. The app is a
+static folder either way, so switching later is a config change.
 
 ---
 
@@ -165,11 +175,11 @@ criteria a reviewer can check mechanically.
 | T3 | `bases.ts` + `inning.ts`: runner advancement, outs, half-inning and game transitions | Sonnet | Scenario tests in §4 pass verbatim (they are written as given/when/then) |
 | T4 | `sim.ts` + `season.ts`: opponent half-inning sim, schedule, standings, stat accumulation | Sonnet | A full 20-game season runs headless from one seed; standings and stat totals are internally consistent |
 | T5 | Tuning script: 10k games, print league averages vs target bands | Sonnet, reviewed by a stronger model | Script exists; a stronger model adjusts constants until §7 bands are hit |
-| T6 | `store/`: save/load, schema version, migrate, export/import as base64 text | Haiku | Round-trip tests; a corrupted save falls back to a fresh season without crashing |
+| T6 | `store/`: save/load, schema version, migrate, save-code export/import per GAME_DESIGN.md §6.1 | Sonnet | The §6.1 test list passes; a corrupted localStorage save falls back to a fresh season without crashing |
 | T7 | UI: at-bat screen per mockup `Main.dc.html` | Sonnet | Matches mockup layout; every engine choice reachable; tap targets ≥ 44px |
-| T8 | UI: home, between-innings, box score, standings per the other mockups | Sonnet | Same |
-| T9 | PWA: manifest, icons, service worker, offline load | Haiku | Lighthouse PWA installable check passes |
-| T10 | Cloudflare Pages deploy config + README instructions for the one-time setup | Haiku | Preview deploy works from a PR |
+| T8 | UI: home, between-innings, season, settings/transfer per the other mockups | Sonnet | Same; save-code preview and error messages match §6.1 |
+| T9 | PWA: manifest, icons, service worker, offline load, `/baseball/` base path | Haiku | Lighthouse PWA installable check passes at the Pages URL |
+| T10 | GitHub Pages deploy workflow + README instructions for the one-time Pages setting | Haiku | Push to `main` publishes to `tbc-personal.github.io/baseball/` |
 
 Review policy: a stronger model reads every PR diff against its ticket's
 acceptance criteria and the design doc before merge. The tuning ticket (T5)
@@ -178,19 +188,17 @@ back to a stronger model.
 
 ---
 
-## 5. Open questions for you
+## 5. Decisions log
 
-None of these block Phase 1. Defaults are stated; correct them if wrong.
+| Decision | Choice | Note |
+|---|---|---|
+| Platform | Web PWA only | No Apple Developer account; iOS not planned |
+| Team name | Harbor Herons (placeholder) | Editable in Settings |
+| League | Every team is a bird | See GAME_DESIGN.md §5.2 |
+| Decision granularity | One choice per pitch | |
+| Game length | 9 innings, one half-inning per break | 6-inning option is a one-line change if it drags |
+| Hosting | GitHub Pages, repo set to public | Fallback: Cloudflare Pages if the repo stays private |
+| Cross-device | Copy-paste save code | GAME_DESIGN.md §6.1 |
 
-1. **Team name.** Default in the mockups is the "Harbor Herons". Placeholder;
-   change it to anything.
-2. **Decision granularity.** The design uses one choice per *pitch* (Take /
-   Contact / Power), so a half-inning is roughly 15 to 25 taps and 60 to 90
-   seconds. The alternative is one choice per *plate appearance*, which is
-   about 5 taps per half-inning but noticeably thinner. Default: per pitch.
-3. **Game length.** Default is 9 innings, played one half-inning per break,
-   so a game spans about a workday. A 6-inning option is a one-line change.
-4. **Hosting.** Cloudflare Pages is the default. If you already pay for
-   GitHub Pro, GitHub Pages is equally fine and keeps everything on GitHub.
-5. **Do you have an Apple Developer account already?** If yes, the cost
-   argument against iOS weakens, though the pipeline argument stands.
+Still open, not blocking: whether to name the league "Flyway League"
+(composed suggestion, flagged in GAME_DESIGN.md §5.2).
