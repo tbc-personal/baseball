@@ -15,7 +15,8 @@ import {
   milestoneLine,
   gameResultLine,
   describePitch,
-  withSeasonHitCount
+  withSeasonHitCount,
+  pitchCountLabel
 } from '../src/ui/format'
 import { sortBatting, type BattingRow } from '../src/ui/SeasonScreen'
 import type { BatterStats } from '../src/engine/types'
@@ -384,5 +385,18 @@ describe('withSeasonHitCount', () => {
     expect(withSeasonHitCount('Dee Okafor bunts for a single.', 'Dee Okafor', 'bunt-single', s)).toBe(
       'Dee Okafor bunts for a single.'
     )
+  })
+})
+
+describe('pitchCountLabel', () => {
+  it('shows the game total and the at-bat total, without repeating the tendency', () => {
+    expect(pitchCountLabel(61, 5)).toBe('61 P · 5 this at-bat')
+    // PitcherRead renders "{tendency} · {pitchLabel}", so a tendency here
+    // would print twice.
+    expect(pitchCountLabel(61, 5)).not.toMatch(/Neutral|Attacker|Nibbler/)
+  })
+
+  it('handles the first pitch of a game', () => {
+    expect(pitchCountLabel(0, 0)).toBe('0 P · 0 this at-bat')
   })
 })

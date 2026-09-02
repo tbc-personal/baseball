@@ -15,7 +15,7 @@
 import { useState } from 'preact/hooks'
 import type { Choice, GameState } from '../engine/types'
 import type { Teams } from '../engine/inning'
-import { applyPitch, createGame, strikeoutsOf } from '../engine/inning'
+import { applyPitch, createGame, strikeoutsOf, pitchCountsOf } from '../engine/inning'
 import type { HalfInningRecap, PlayLogEntry } from '../engine/sim'
 import { simulateHalfInningWithRecap, isHitEvent } from '../engine/sim'
 import { makeRng } from '../engine/rng'
@@ -58,6 +58,7 @@ import {
   gameResultLine,
   halfInningLabel,
   ordinal,
+  pitchCountLabel,
   primaryAction,
   resumeSentence,
   surname,
@@ -466,7 +467,7 @@ export function App() {
         pitcherName={pitcher.name}
         bucket={game.currentPitch.displayedBucket}
         tendency={pitcher.tendency}
-        pitchLabel={`${game.count.balls + game.count.strikes} this at-bat`}
+        pitchLabel={pitchCountLabel(pitchCountsOf(game)[pitchingSide], pitchCountsOf(game).thisAtBat)}
         recommended={recommendedChoice(game.currentPitch.displayedBucket)}
         buntAvailable={isBuntAvailable(game.bases, game.outs, game.count)}
         lastPitch={lastPitch}

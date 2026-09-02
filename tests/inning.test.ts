@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { applyPitch, createGame, strikeoutsOf } from '../src/engine/inning'
+import { applyPitch, createGame, strikeoutsOf, pitchCountsOf } from '../src/engine/inning'
 import { makeRng } from '../src/engine/rng'
 import type { Teams } from '../src/engine/inning'
 import { StubRng, PAD, makeTeam, makeGameState } from './fixtures'
@@ -574,5 +574,76 @@ describe('per-game strikeout counter', () => {
     // A game saved before the counter existed has no field at all.
     const legacy = { ...fresh, strikeouts: undefined }
     expect(strikeoutsOf(legacy)).toEqual({ home: 0, away: 0 })
+  })
+})
+
+describe('pitch counts', () => {
+  function freshGame() {
+    return createGame({
+      gameIndex: 0,
+      homeTeam: home,
+      awayTeam: away,
+      homePitcher: home.pitchers[0],
+      awayPitcher: away.pitchers[0],
+      seed: 20260401
+    })
+  }
+
+  it('credits the pitch to the pitching side, not the batting side', () => {
+    // Top of the 1st: the HOME pitcher is throwing.
+    const state = makeGameState({ half: 'top', currentPitch: { pZone: 0.9 } })
+    const { state: next } = applyPitch(state, 'Take', teams, stub([0.0]))
+    expect(pitchCountsOf(next).home).toBe(1)
+    expect(pitchCountsOf(next).away).toBe(0)
+  })
+
+  it('credits the away pitcher in the bottom half', () => {
+    const state = makeGameState({ half: 'bottom', currentPitch: { pZone: 0.9 } })
+    const { state: next } = applyPitch(state, 'Take', teams, stub([0.0]))
+    expect(pitchCountsOf(next).away).toBe(1)
+    expect(pitchCountsOf(next).home).toBe(0)
+  })
+
+  it('counts every pitch of a plate appearance, including fouls that do not move the count', () => {
+    // A foul with two strikes leaves the count at 1-2 but is still a pitch.
+    const state = makeGameState({ half: 'top', count: { balls: 1, strikes: 2 }, currentPitch: { pZone: 0.6 } })
+    // zone, foul
+    const { state: next } = applyPitch(state, 'Contact', teams, stub([0.0, 0.5]))
+    expect(next.count).toEqual({ balls: 1, strikes: 2 })
+    expect(pitchCountsOf(next).home).toBe(1)
+    expect(pitchCountsOf(next).thisAtBat).toBe(1)
+  })
+
+  it('resets the at-bat count when the plate appearance ends, but not the game count', () => {
+    const state = makeGameState({
+      half: 'top',
+      count: { balls: 0, strikes: 2 },
+      currentPitch: { pZone: 0.9 },
+      pitchCounts: { home: 40, away: 12, thisAtBat: 5 }
+    })
+    const { state: next, result } = applyPitch(state, 'Take', teams, stub([0.0]))
+    expect(result.event).toBe('strikeout')
+    expect(pitchCountsOf(next).home).toBe(41)
+    expect(pitchCountsOf(next).thisAtBat).toBe(0)
+  })
+
+  it('runs up over a real half-inning, and the game total never decreases', () => {
+    let state = freshGame()
+    const rng = makeRng(20260402)
+    let previous = 0
+    for (let i = 0; i < 30; i++) {
+      const { state: next, result } = applyPitch(state, 'Take', teams, rng)
+      const counts = pitchCountsOf(next)
+      expect(counts.home + counts.away).toBe(previous + 1)
+      previous = counts.home + counts.away
+      state = next
+      if (result.halfInningEnded || result.gameEnded) break
+    }
+    expect(previous).toBeGreaterThanOrEqual(9)
+  })
+
+  it('createGame starts at zero, and a pre-0.1.1 save reads as zero', () => {
+    expect(pitchCountsOf(freshGame())).toEqual({ home: 0, away: 0, thisAtBat: 0 })
+    expect(pitchCountsOf({ ...freshGame(), pitchCounts: undefined })).toEqual({ home: 0, away: 0, thisAtBat: 0 })
   })
 })

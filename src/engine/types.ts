@@ -186,6 +186,23 @@ export interface GameState {
     away: number
   }
 
+  /**
+   * Pitch counts for THIS game: `home`/`away` are pitches thrown BY that
+   * side's pitcher (so the away figure is what the home batters have seen),
+   * and `thisAtBat` is the current plate appearance's, reset whenever one
+   * ends.
+   *
+   * Optional because it was added after 0.1 shipped: a game saved by 0.1
+   * has no counts, and reading absent as zero lets it resume and start
+   * counting rather than being invalidated by a schema migration mid-game.
+   * Every game this build creates has it. Use pitchCountsOf().
+   */
+  pitchCounts?: {
+    home: number
+    away: number
+    thisAtBat: number
+  }
+
   // Each side keeps its own place in the batting order across innings
   currentBatterIndex: {
     home: number

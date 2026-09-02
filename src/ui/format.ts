@@ -422,3 +422,16 @@ export function withSeasonHitCount(
   if (!play.startsWith(prefix)) return play
   return `${prefix} (${count})${play.slice(prefix.length)}`
 }
+
+/**
+ * The pitcher's workload for the line under the read: his pitch count for
+ * the whole game and the count for this plate appearance, as
+ * "61 P · 5 this at-bat". PitcherRead prefixes the tendency itself, so this
+ * deliberately does not repeat it.
+ *
+ * The game total is the pitcher's own, not the number of pitches the
+ * batting side has seen -- it is the figure that says whether he is tiring.
+ */
+export function pitchCountLabel(gamePitches: number, atBatPitches: number): string {
+  return `${gamePitches} P · ${atBatPitches} this at-bat`
+}
