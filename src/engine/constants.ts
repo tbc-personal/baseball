@@ -20,7 +20,7 @@ export const RATING_ADJ_DIVISOR = 100
 // ============================================================================
 
 /** Base in-zone probability before modifiers */
-export const BASE_ZONE_PROBABILITY = 0.518
+export const BASE_ZONE_PROBABILITY = 0.515
 
 /** Count modifiers for p_zone calculation: count -> adjustment */
 export const COUNT_MOD: Record<string, number> = {
@@ -45,7 +45,7 @@ export const COUNT_MOD: Record<string, number> = {
  * Tuning lever, range 0.20-0.60. This is the only term in p_zone that
  * depends on the batter.
  */
-export const CHALLENGE_WEIGHT = 0.4
+export const CHALLENGE_WEIGHT = 0.5
 
 /** Zone probability clamping bounds */
 export const ZONE_CLAMP_MIN = 0.2
