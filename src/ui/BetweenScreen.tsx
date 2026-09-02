@@ -22,7 +22,14 @@ export interface BetweenScreenProps {
   log: PlayLogEntry[]
   opponentHalfLabel: string
   opponentTeamName: string
-  opponentSummary: string
+  /**
+   * The opponent's simulated half, or null when there was not one to play --
+   * which happens exactly when the game just ended. The box is omitted
+   * entirely in that case rather than rendered with an empty header and
+   * "No opponent half to play."; the result line above already says the
+   * game is over.
+   */
+  opponentSummary: string | null
   lineScore: {
     awayShort: string
     homeShort: string
@@ -192,24 +199,26 @@ export function BetweenScreen(props: BetweenScreenProps) {
         })}
       </div>
 
-      <div
-        style={{
-          border: '1.5px solid var(--sc-ink)',
-          background: 'var(--sc-card-bg)',
-          padding: '12px 14px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '6px'
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--sc-muted-ink)' }}>
-          <span>
-            {props.opponentHalfLabel} · {props.opponentTeamName}
-          </span>
-          <span>Simulated</span>
+      {props.opponentSummary !== null && (
+        <div
+          style={{
+            border: '1.5px solid var(--sc-ink)',
+            background: 'var(--sc-card-bg)',
+            padding: '12px 14px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '6px'
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--sc-muted-ink)' }}>
+            <span>
+              {props.opponentHalfLabel} · {props.opponentTeamName}
+            </span>
+            <span>Simulated</span>
+          </div>
+          <div style={{ fontSize: '14px', lineHeight: 1.45 }}>{props.opponentSummary}</div>
         </div>
-        <div style={{ fontSize: '14px', lineHeight: 1.45 }}>{props.opponentSummary}</div>
-      </div>
+      )}
 
       <div style={{ borderTop: '1px solid var(--sc-ink)', borderBottom: '1px solid var(--sc-ink)' }}>
         <div
