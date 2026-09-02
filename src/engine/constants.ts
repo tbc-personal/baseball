@@ -33,10 +33,19 @@ export const COUNT_MOD: Record<string, number> = {
   '0-0': 0,
   '1-1': 0,
   '0-1': -0.05,
-  '2-2': -0.05,
-  '1-2': -0.12,
-  '0-2': -0.2
+  '2-2': -0.02,
+  '1-2': -0.05,
+  '0-2': -0.08
 }
+
+/**
+ * GAME_DESIGN.md 3.2: challenge_mod = -adj(Contact) * CHALLENGE_WEIGHT.
+ * A pitcher attacks a hitter he is not afraid of and works around one he
+ * is, so a low Contact rating raises the chance the pitch is a strike.
+ * Tuning lever, range 0.20-0.60. This is the only term in p_zone that
+ * depends on the batter.
+ */
+export const CHALLENGE_WEIGHT = 0.4
 
 /** Zone probability clamping bounds */
 export const ZONE_CLAMP_MIN = 0.2

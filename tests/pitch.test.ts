@@ -20,6 +20,7 @@ import {
   ZONE_CLAMP_MAX,
   TENDENCY_MOD_ATTACKER,
   TENDENCY_MOD_NIBBLER,
+  CHALLENGE_WEIGHT,
   READ_BUCKET_LIKELY_BALL,
   READ_BUCKET_LIKELY_STRIKE,
   PITCH_OUTCOMES,
@@ -52,53 +53,83 @@ describe('adj', () => {
 
 describe('zoneProbability', () => {
   const neutral = makePitcher()
+  // Contact 50 makes challenge_mod exactly 0, so this batter isolates the
+  // count/pitcher terms from the section 3.2 challenge term.
+  const averageBatter = makeBatter({ contact: 50 })
 
-  it('matches hand-computed values for all 12 count states (Neutral, Control 50)', () => {
+  it('matches hand-computed values for all 12 count states (Neutral, Control 50, Contact 50)', () => {
     for (const [key, mod] of Object.entries(COUNT_MOD)) {
       const [balls, strikes] = key.split('-').map(Number)
       const count: Count = { balls, strikes }
       // The clamp is part of the formula, so the expectation must apply it too.
       const expected = Math.min(ZONE_CLAMP_MAX, Math.max(ZONE_CLAMP_MIN, BASE_ZONE_PROBABILITY + mod))
-      expect(zoneProbability(count, neutral)).toBeCloseTo(expected, 10)
+      expect(zoneProbability(count, averageBatter, neutral)).toBeCloseTo(expected, 10)
     }
   })
 
   it('Attacker shifts by +0.08 relative to Neutral', () => {
     const count: Count = { balls: 0, strikes: 0 }
     const attacker = makePitcher({ tendency: 'Attacker' })
-    expect(zoneProbability(count, attacker) - zoneProbability(count, neutral)).toBeCloseTo(
-      TENDENCY_MOD_ATTACKER,
-      10
-    )
+    expect(
+      zoneProbability(count, averageBatter, attacker) - zoneProbability(count, averageBatter, neutral)
+    ).toBeCloseTo(TENDENCY_MOD_ATTACKER, 10)
   })
 
   it('Nibbler shifts by -0.08 relative to Neutral', () => {
     const count: Count = { balls: 0, strikes: 0 }
     const nibbler = makePitcher({ tendency: 'Nibbler' })
-    expect(zoneProbability(count, nibbler) - zoneProbability(count, neutral)).toBeCloseTo(
-      TENDENCY_MOD_NIBBLER,
-      10
-    )
+    expect(
+      zoneProbability(count, averageBatter, nibbler) - zoneProbability(count, averageBatter, neutral)
+    ).toBeCloseTo(TENDENCY_MOD_NIBBLER, 10)
   })
 
   it('Control shifts p_zone by adj(Control)', () => {
     const count: Count = { balls: 0, strikes: 0 }
     const highControl = makePitcher({ control: 80 })
-    expect(zoneProbability(count, highControl) - zoneProbability(count, neutral)).toBeCloseTo(
-      adj(80),
-      10
-    )
+    expect(
+      zoneProbability(count, averageBatter, highControl) - zoneProbability(count, averageBatter, neutral)
+    ).toBeCloseTo(adj(80), 10)
   })
 
-  it('never exceeds the ceiling or falls below the floor, for any count and pitcher', () => {
+  it('challenges weak contact and pitches around strong contact (section 3.2 challenge_mod)', () => {
+    const count: Count = { balls: 0, strikes: 0 }
+    const weak = makeBatter({ contact: 20 })
+    const strong = makeBatter({ contact: 80 })
+
+    expect(zoneProbability(count, weak, neutral) - zoneProbability(count, averageBatter, neutral)).toBeCloseTo(
+      -adj(20) * CHALLENGE_WEIGHT,
+      10
+    )
+    expect(zoneProbability(count, strong, neutral) - zoneProbability(count, averageBatter, neutral)).toBeCloseTo(
+      -adj(80) * CHALLENGE_WEIGHT,
+      10
+    )
+    // The weak-contact hitter sees strictly more strikes than the strong one.
+    expect(zoneProbability(count, weak, neutral)).toBeGreaterThan(zoneProbability(count, strong, neutral))
+  })
+
+  it('the challenge term is the only batter-dependent term: Power and Eye do not move p_zone', () => {
+    const count: Count = { balls: 1, strikes: 1 }
+    const base = makeBatter({ contact: 50, power: 20, eye: 20 })
+    const slugger = makeBatter({ contact: 50, power: 80, eye: 80 })
+    expect(zoneProbability(count, slugger, neutral)).toBeCloseTo(zoneProbability(count, base, neutral), 10)
+  })
+
+  it('never exceeds the ceiling or falls below the floor, for any count, batter and pitcher', () => {
     const tendencies = ['Attacker', 'Nibbler', 'Neutral'] as const
     for (let balls = 0; balls <= 3; balls++) {
       for (let strikes = 0; strikes <= 2; strikes++) {
         for (const tendency of tendencies) {
           for (let control = 20; control <= 80; control += 5) {
-            const p = zoneProbability({ balls, strikes }, makePitcher({ control, tendency }))
-            expect(p).toBeGreaterThanOrEqual(ZONE_CLAMP_MIN)
-            expect(p).toBeLessThanOrEqual(ZONE_CLAMP_MAX)
+            for (let contact = 20; contact <= 80; contact += 10) {
+              const p = zoneProbability(
+                { balls, strikes },
+                makeBatter({ contact }),
+                makePitcher({ control, tendency })
+              )
+              expect(p).toBeGreaterThanOrEqual(ZONE_CLAMP_MIN)
+              expect(p).toBeLessThanOrEqual(ZONE_CLAMP_MAX)
+            }
           }
         }
       }
@@ -111,11 +142,13 @@ describe('zoneProbability', () => {
     expect(Math.min(ZONE_CLAMP_MAX, Math.max(ZONE_CLAMP_MIN, overshoot))).toBe(ZONE_CLAMP_MAX)
   })
 
-  it('clamps at the 0.20 floor (0-2, low-Control Nibbler)', () => {
+  it('clamps at the floor for the least strike-prone combination there is', () => {
+    // 0-2, minimum Control, Nibbler, and a Contact-80 hitter the pitcher
+    // works around: every term in the formula pushes down at once.
     const count: Count = { balls: 0, strikes: 2 }
     const pitcher = makePitcher({ control: 20, tendency: 'Nibbler' })
-    // 0.55 - 0.20 - 0.30 - 0.08 = -0.03, clamps to 0.20
-    expect(zoneProbability(count, pitcher)).toBe(ZONE_CLAMP_MIN)
+    const strong = makeBatter({ contact: 80 })
+    expect(zoneProbability(count, strong, pitcher)).toBe(ZONE_CLAMP_MIN)
   })
 })
 
@@ -383,7 +416,7 @@ describe('preparePitch / resolvePitch', () => {
 
   it('fixes p_zone before the choice is made', () => {
     const preview = preparePitch(count, batter, pitcher, makeRng(1))
-    expect(preview.pZone).toBe(zoneProbability(count, pitcher))
+    expect(preview.pZone).toBe(zoneProbability(count, batter, pitcher))
   })
 
   it('Take is a called strike in the zone and a ball otherwise', () => {

@@ -92,7 +92,7 @@ adj(rating) = (rating - 50) / 100        # range −0.30 … +0.30
 ### 3.2 Is the pitch in the zone?
 
 ```
-p_zone = BASE_ZONE + count_mod + adj(Control) + tendency_mod
+p_zone = BASE_ZONE + count_mod + adj(Control) + tendency_mod + challenge_mod
 ```
 
 `BASE_ZONE` starts at **0.48** and is a tuning lever with range 0.42–0.56.
@@ -105,9 +105,32 @@ feel different from an 0-2 count, and tuning must not flatten them.
 | 2-0, 3-1 | +0.12 |
 | 1-0, 2-1, 3-2 | +0.05 |
 | 0-0, 1-1 | 0 |
-| 0-1, 2-2 | −0.05 |
-| 1-2 | −0.12 |
-| 0-2 | −0.20 |
+| 0-1 | −0.05 |
+| 2-2 | −0.02 |
+| 1-2 | −0.05 |
+| 0-2 | −0.08 |
+
+The two-strike modifiers are deliberately mild. A pitcher ahead in the
+count expands the zone, but he does not stop competing in it: real pitchers
+throw roughly ten points fewer strikes at 0-2 than at 0-0, not twenty-five,
+and a batter who can assume ball four is coming every time he reaches two
+strikes is not playing baseball. An earlier draft used −0.20 at 0-2 and
+−0.12 at 1-2; the effect was that the read at every two-strike count was
+`Likely ball` for every legal `BASE_ZONE`, so the §5.4 policy took every
+two-strike pitch and roughly seven strikeouts in ten were called strikes.
+
+**`challenge_mod` — the pitcher picks on weak contact.**
+
+```
+challenge_mod = -adj(Contact) * CHALLENGE_WEIGHT
+```
+
+`CHALLENGE_WEIGHT` is **0.40** and is a tuning lever with range 0.20–0.60.
+A pitcher challenges a hitter he is not afraid of and works around one he
+is: against Contact 20 this adds +0.12 to `p_zone`, against Contact 80 it
+subtracts 0.12. This is the only place the batter affects whether the pitch
+is a strike, and it is what makes the read worth reading — the same count
+gives a different pitch to the top of the order than to the bottom.
 
 Clamp `p_zone` to [0.20, 0.90]. Roll once; the pitch is either `zone` or
 `ball`.
@@ -432,6 +455,7 @@ with numbers. Do not pick one and call it done.
 ### 7.2 What tuning may touch
 
 - `BASE_ZONE` within 0.42–0.56.
+- `CHALLENGE_WEIGHT` (§3.2) within 0.20–0.60.
 - The swing table (§3.4) within its stated ranges.
 - The batted-ball table (§3.5) within its stated ranges.
 - Base-running probabilities (§4) by at most ±0.15.

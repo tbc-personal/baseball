@@ -12,6 +12,7 @@ import {
   RATING_ADJ_DIVISOR,
   BASE_ZONE_PROBABILITY,
   COUNT_MOD,
+  CHALLENGE_WEIGHT,
   ZONE_CLAMP_MIN,
   ZONE_CLAMP_MAX,
   TENDENCY_MOD_ATTACKER,
@@ -57,10 +58,18 @@ function countKey(count: Count): string {
   return `${count.balls}-${count.strikes}`
 }
 
-/** p_zone = BASE_ZONE + count_mod + adj(Control) + tendency_mod, clamped to [0.20, 0.90] */
-export function zoneProbability(count: Count, pitcher: Pitcher): number {
+/**
+ * p_zone = BASE_ZONE + count_mod + adj(Control) + tendency_mod + challenge_mod,
+ * clamped to [0.20, 0.90] (GAME_DESIGN.md 3.2).
+ *
+ * challenge_mod = -adj(Contact) * CHALLENGE_WEIGHT: the pitcher goes after a
+ * weak-contact hitter and pitches around a dangerous one. It is the only
+ * batter-dependent term, which is why this takes the batter at all.
+ */
+export function zoneProbability(count: Count, batter: Batter, pitcher: Pitcher): number {
   const countMod = COUNT_MOD[countKey(count)] ?? 0
-  const raw = BASE_ZONE_PROBABILITY + countMod + adj(pitcher.control) + tendencyMod(pitcher)
+  const challengeMod = -adj(batter.contact) * CHALLENGE_WEIGHT
+  const raw = BASE_ZONE_PROBABILITY + countMod + adj(pitcher.control) + tendencyMod(pitcher) + challengeMod
   return Math.min(ZONE_CLAMP_MAX, Math.max(ZONE_CLAMP_MIN, raw))
 }
 
@@ -244,7 +253,7 @@ export interface PitchPreview {
  * read that gets shown. Must be called BEFORE the player picks a choice.
  */
 export function preparePitch(count: Count, batter: Batter, pitcher: Pitcher, rng: Rng): PitchPreview {
-  const pZone = zoneProbability(count, pitcher)
+  const pZone = zoneProbability(count, batter, pitcher)
   return {
     pZone,
     trueBucket: trueReadBucket(pZone),
