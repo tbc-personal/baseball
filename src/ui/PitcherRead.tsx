@@ -1,11 +1,14 @@
 /**
  * Pitcher read row (docs/mockups/Main.dc.html lines 87-100): "Read on
  * <pitcher>" with the bucket in red Oswald, plus the tendency and pitch
- * count on the right (three filled bars, one per pitch shown -- the mockup
- * draws exactly 3, so this caps the bar row at 3 regardless of the real
- * count). `pitchLabel` carries the pitcher's tendency, his pitch count for
- * the game and the count for this plate appearance; it is built by
- * format.ts's pitcherWorkload, so this component stays presentational.
+ * count on the right. `pitchLabel` carries the pitcher's tendency, his
+ * pitch count for the game and the count for this plate appearance; it is
+ * built by format.ts's pitcherWorkload, so this component stays
+ * presentational.
+ *
+ * The mockup's three filled bars next to this text are dropped: they were
+ * hardcoded to always render 3 regardless of the actual pitch count, so
+ * they carried no information.
  *
  * "{tendency} · {pitchLabel}" can run past the mockup's 3-digit pitch
  * counts on a real game -- both flex columns get minWidth: 0 so the text
@@ -34,16 +37,9 @@ export function PitcherRead({ pitcherName, bucket, tendency, pitchLabel }: Pitch
           {bucket}
         </span>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', minWidth: 0 }}>
-        <div style={{ display: 'flex', flexDirection: 'row', gap: '4px' }}>
-          {[0, 1, 2].map((i) => (
-            <div key={i} style={{ width: '22px', height: '8px', background: 'var(--sc-pencil-red)' }} />
-          ))}
-        </div>
-        <span style={{ fontSize: '11px', color: 'var(--sc-muted-ink)', textAlign: 'right' }}>
-          {tendency} &middot; {pitchLabel}
-        </span>
-      </div>
+      <span style={{ fontSize: '11px', color: 'var(--sc-muted-ink)', textAlign: 'right', minWidth: 0 }}>
+        {tendency} &middot; {pitchLabel}
+      </span>
     </div>
   )
 }
