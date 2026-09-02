@@ -247,6 +247,27 @@ describe('standingsTable', () => {
       expect(row.lastFiveDisplay).toBe('')
     }
   })
+
+  it('sorts a fresh 0-0 season alphabetically by team name', () => {
+    const season = createSeason(1)
+    const names = standingsTable(season).map((r) => r.teamName)
+    expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)))
+  })
+
+  it('the alphabetical tiebreak is only a tiebreak: a win still outranks it', () => {
+    const season = createSeason(1)
+    // Give the alphabetically *last* team the only win in the league.
+    const byName = standingsTable(season)
+    const lastAlphabetically = byName[byName.length - 1].teamId
+    const standings = season.standings.map((r) =>
+      r.teamId === lastAlphabetically ? { ...r, wins: 1 } : r
+    )
+    const table = standingsTable({ ...season, standings })
+    expect(table[0].teamId).toBe(lastAlphabetically)
+    // The teams still tied at 0-0 below it stay in alphabetical order.
+    const tiedNames = table.slice(1).map((r) => r.teamName)
+    expect(tiedNames).toEqual([...tiedNames].sort((a, b) => a.localeCompare(b)))
+  })
 })
 
 // ============================================================================

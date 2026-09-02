@@ -7,7 +7,7 @@
  */
 
 import type { PlayLogEntry } from '../engine/sim'
-import { halfInningSummary, playGutter } from './format'
+import { halfInningSummary, milestoneLine, playGutter } from './format'
 
 export interface BetweenScreenProps {
   /**
@@ -35,6 +35,11 @@ export interface BetweenScreenProps {
     ownSide: 'home' | 'away'
     currentInningIndex: number
   }
+  /**
+   * Milestone ids that fired on the game just completed (section 6).
+   * Empty for the ordinary between-innings break.
+   */
+  milestones: readonly string[]
   nextLabel: string
   savedNote: string
   onNext: () => void
@@ -97,6 +102,8 @@ export function BetweenScreen(props: BetweenScreenProps) {
     </div>
   )
 
+  const milestone = milestoneLine(props.milestones)
+
   return (
     <div className="sc-screen" style={{ paddingTop: '28px', gap: '18px' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', borderBottom: '2px solid var(--sc-ink)', paddingBottom: '10px' }}>
@@ -114,6 +121,32 @@ export function BetweenScreen(props: BetweenScreenProps) {
           )}
         </div>
       </div>
+
+      {milestone !== null && (
+        <div
+          style={{
+            border: '1.5px solid var(--sc-pencil-red)',
+            padding: '10px 14px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '4px'
+          }}
+        >
+          <span style={{ fontSize: '11px', letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--sc-muted-ink)' }}>
+            Milestone
+          </span>
+          <span
+            style={{
+              fontFamily: 'var(--sc-font-display)',
+              fontSize: '17px',
+              fontWeight: 600,
+              color: 'var(--sc-pencil-red)'
+            }}
+          >
+            {milestone}
+          </span>
+        </div>
+      )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '9px', fontSize: '14px', lineHeight: 1.4 }}>
         {props.log.map((entry, i) => {

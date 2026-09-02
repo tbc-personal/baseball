@@ -317,6 +317,7 @@ export function App() {
     const lineScoreGame = game ?? null
     return (
       <BetweenScreen
+        milestones={b.milestones}
         yoursPlayed={b.yours.log.length > 0}
         halfLabel={halfInningLabel(b.yours.half, b.yours.inning)}
         runs={b.yours.runs}

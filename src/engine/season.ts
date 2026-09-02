@@ -303,18 +303,24 @@ export interface StandingsRow extends TeamRecord {
 
 /**
  * Standings rows sorted by win pct (ties broken by run differential, then
- * team id for stability -- §5.3/§6 don't specify a tiebreaker), with
+ * alphabetically by team name -- §5.3/§6 don't specify a tiebreaker), with
  * games back, run differential, and the L5 display string computed so the
  * UI never has to.
+ *
+ * The final tiebreak is the team's display name rather than its id so that
+ * a fresh season, where every team is 0-0 with a run differential of 0,
+ * reads down the table in alphabetical order instead of an order that
+ * looks arbitrary to the player.
  */
 export function standingsTable(season: SeasonState): StandingsRow[] {
   const lookup = teamLookup()
+  const nameOf = (id: TeamId): string => lookup[id]?.name ?? id
   const sorted = [...season.standings].sort((a, b) => {
     const pctDiff = winPct(b) - winPct(a)
     if (pctDiff !== 0) return pctDiff
     const diffDiff = b.runsFor - b.runsAgainst - (a.runsFor - a.runsAgainst)
     if (diffDiff !== 0) return diffDiff
-    return a.teamId.localeCompare(b.teamId)
+    return nameOf(a.teamId).localeCompare(nameOf(b.teamId))
   })
   const leader = sorted[0]
 

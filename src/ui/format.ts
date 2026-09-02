@@ -287,3 +287,27 @@ export function describeHalfInning(r: { runs: number; hits: number; leftOnBase: 
     r.leftOnBase === 0 ? '' : ` ${r.leftOnBase} left on base.`
   return `${hits} in ${r.plays} batter${r.plays === 1 ? '' : 's'}. ${runs}${stranded}`
 }
+
+/**
+ * The between-innings milestone line (GAME_DESIGN.md section 6).
+ *
+ * Section 6 names the milestones and says one should surface between
+ * innings, but neither it nor Between.dc.html specifies the wording, so
+ * these labels are a UI choice. Returns null when nothing fired, so the
+ * screen renders no empty band; several milestones can fire on the same
+ * game (a season-ending shutout, say) and are joined in the order
+ * checkMilestones reported them.
+ */
+export function milestoneLine(fired: readonly string[]): string | null {
+  if (fired.length === 0) return null
+  const labels: Record<string, string> = {
+    'first-hr': 'First home run of the season',
+    'first-walk-off': 'First walk-off win',
+    'first-shutout': 'First shutout',
+    'games-played-mark': 'Ten games played',
+    clinch: 'Winning season clinched',
+    eliminated: 'Eliminated from a winning season',
+    'season-over': 'Season complete'
+  }
+  return fired.map((id) => labels[id] ?? id).join(' · ')
+}

@@ -11,7 +11,8 @@ import {
   formatCharacterCount,
   relativeTime,
   previewSummary,
-  describeHalfInning
+  describeHalfInning,
+  milestoneLine
 } from '../src/ui/format'
 import { sortBatting, type BattingRow } from '../src/ui/SeasonScreen'
 import type { BatterStats } from '../src/engine/types'
@@ -194,5 +195,30 @@ describe('the gutter marker is the out count, not the run count', () => {
   it('a play that scores without recording an out still shows a dash', () => {
     // A bases-loaded walk scores a run but records no out.
     expect(playGutter({ outsAfter: 1, runsScored: 1 }, 1)).toEqual({ marker: '—', scored: true })
+  })
+})
+
+describe('milestoneLine', () => {
+  it('returns null when nothing fired, so the screen renders no empty band', () => {
+    expect(milestoneLine([])).toBeNull()
+  })
+
+  it('gives every section 6 milestone id a readable label', () => {
+    const ids = ['first-hr', 'first-walk-off', 'first-shutout', 'games-played-mark', 'clinch', 'eliminated', 'season-over']
+    for (const id of ids) {
+      const line = milestoneLine([id])
+      expect(line).not.toBeNull()
+      // A label, not the raw id echoed back.
+      expect(line).not.toBe(id)
+      expect(line!.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('joins several milestones fired on the same game', () => {
+    expect(milestoneLine(['first-shutout', 'season-over'])).toBe('First shutout · Season complete')
+  })
+
+  it('falls back to the raw id rather than dropping an unknown milestone', () => {
+    expect(milestoneLine(['not-a-milestone'])).toBe('not-a-milestone')
   })
 })
