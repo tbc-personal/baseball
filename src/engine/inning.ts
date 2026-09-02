@@ -135,12 +135,82 @@ function describeCount(count: Count): string {
   return `${count.balls}-${count.strikes}`
 }
 
+// ============================================================================
+// Out flavour (play log colour)
+// ============================================================================
+
+/**
+ * How an out looked, for the play log: "grounded out to short", "flied out
+ * to center". Purely descriptive -- it never changes what happened, only
+ * how it reads.
+ *
+ * The variation is indexed off the RNG's state AFTER the pitch rather than
+ * drawn from it. That is deliberate: a new draw would shift the RNG stream,
+ * which would change every tuned measurement in TUNING.md and make existing
+ * saves replay differently. Reading the state is a pure function of a
+ * number the pitch already produced, so a game still replays identically
+ * from its seed.
+ *
+ * The two tables differ by swing, as a Power swing and a Contact swing put
+ * the ball in the air at very different rates: Contact skews to the
+ * infield and to grounders, Power to the outfield and to fly balls.
+ * Entries repeat where an outcome should be commoner.
+ */
+const CONTACT_OUTS: readonly string[] = [
+  'grounded out to short',
+  'grounded out to short',
+  'grounded out to second',
+  'grounded out to second',
+  'grounded out to third',
+  'grounded out to first',
+  'grounded out to the pitcher',
+  'lined out to left',
+  'lined out to center',
+  'popped out to second',
+  'popped out to the catcher',
+  'flied out to left',
+  'flied out to center',
+  'flied out to right'
+]
+
+const POWER_OUTS: readonly string[] = [
+  'flied out to left',
+  'flied out to center',
+  'flied out to center',
+  'flied out to right',
+  'flied out to deep center',
+  'flied out to the warning track in left',
+  'lined out to left',
+  'lined out to center',
+  'lined out to right',
+  'lined out to third',
+  'popped out to the catcher',
+  'grounded out to short',
+  'grounded out to third'
+]
+
+/** Which way the ball left the bat, given the swing and a pitch-derived index. */
+export function outFlavor(swing: Choice, flavorSeed: number): string {
+  const table = swing === 'Power' ? POWER_OUTS : CONTACT_OUTS
+  const idx = Math.abs(Math.trunc(flavorSeed)) % table.length
+  return table[idx]
+}
+
+/** How a sacrifice fly looked. Always to the outfield -- that is what makes it a sac fly. */
+const SAC_FLY_FIELDS: readonly string[] = ['left', 'center', 'right', 'deep center', 'deep right']
+
+export function sacrificeFlyField(flavorSeed: number): string {
+  return SAC_FLY_FIELDS[Math.abs(Math.trunc(flavorSeed)) % SAC_FLY_FIELDS.length]
+}
+
 function describePlay(
   batter: Batter,
   event: PlateAppearanceEvent,
   count: Count,
   runsScored: BatterId[],
-  battingTeam: Team
+  battingTeam: Team,
+  swing: Choice,
+  flavorSeed: number
 ): string {
   const scorers = runsScored.map((id) => battingTeam.batters.find((b) => b.id === id)?.name ?? id)
   const scoreSuffix =
@@ -162,9 +232,9 @@ function describePlay(
     case 'double-play':
       return `${batter.name} grounds into a double play.`
     case 'sacrifice-fly':
-      return `${batter.name} flies out. ${scorers.join(', ')} scores on the sacrifice fly.`
+      return `${batter.name} flied out to ${sacrificeFlyField(flavorSeed)}. ${scorers.join(', ')} scores on the sacrifice fly.`
     case 'out':
-      return `${batter.name} is out.`
+      return `${batter.name} ${outFlavor(swing, flavorSeed)}.`
     case 'sacrifice-bunt':
       return `${batter.name} sacrifices.${scoreSuffix}`
     case 'bunt-single':
@@ -301,7 +371,7 @@ export function applyPitch(state: GameState, choice: Choice, teams: Teams, rng: 
 
   let play: string | null = null
   if (paEnded && event !== null) {
-    play = describePlay(batter, event, state.count, runsScored, battingTeam)
+    play = describePlay(batter, event, state.count, runsScored, battingTeam, choice, rng.state())
   }
 
   // Credit runs and hits.
