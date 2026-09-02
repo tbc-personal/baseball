@@ -92,8 +92,12 @@ adj(rating) = (rating - 50) / 100        # range −0.30 … +0.30
 ### 3.2 Is the pitch in the zone?
 
 ```
-p_zone = 0.55 + count_mod + adj(Control) + tendency_mod
+p_zone = BASE_ZONE + count_mod + adj(Control) + tendency_mod
 ```
+
+`BASE_ZONE` starts at **0.48** and is a tuning lever with range 0.42–0.56.
+The count modifiers below are **fixed**: they are what makes a 3-0 count
+feel different from an 0-2 count, and tuning must not flatten them.
 
 | Count | count_mod |
 |---|---|
@@ -124,11 +128,17 @@ and the remainder redistributed proportionally to in-play and foul.
 | Choice | Zone | Ball |
 |---|---|---|
 | **Take** | Called strike | Ball |
-| **Contact** | 0.70 / 0.20 / 0.10 | 0.30 / 0.35 / 0.35 |
-| **Power** | 0.50 / 0.25 / 0.25 | 0.15 / 0.30 / 0.55 |
+| **Contact** | 0.42 / 0.45 / 0.13 | 0.20 / 0.45 / 0.35 |
+| **Power** | 0.35 / 0.40 / 0.25 | 0.12 / 0.38 / 0.50 |
+
+These are starting values. Tuning may move them within these ranges: in
+play 0.30–0.50 on zone pitches and 0.10–0.30 on balls; foul 0.30–0.50;
+whiff never below 0.10 on a zone pitch. Real swings put the ball in play
+well under half the time, and that is what makes plate appearances last.
 
 Count rules: ball 4 is a walk; strike 3 (called, whiff, or foul bunt) is a
-strikeout; a foul with two strikes keeps the count.
+strikeout; a foul with two strikes keeps the count. **When a plate
+appearance ends for any reason, the next batter starts at 0-0.**
 
 ### 3.5 Batted-ball outcome
 
@@ -140,6 +150,10 @@ When the pitch is in play, roll on the row for the swing that produced it:
 | Contact, ball | 0.75 | 0.20 | 0.04 | 0.005 | 0.005 |
 | Power, zone | 0.58 | 0.15 | 0.12 | 0.01 | 0.14 |
 | Power, ball | 0.74 | 0.13 | 0.07 | 0.01 | 0.05 |
+
+Rows must sum to 1.0. Tuning may move any cell by up to 30% of its value;
+the home-run cells may not exceed 1.3× these numbers, or Power becomes the
+only button worth pressing.
 
 Rating shifts, applied before normalising the row back to 1.0:
 
@@ -205,6 +219,14 @@ Then the game is tied and continues; not over
 
 Given top of the 9th ends with the home team ahead
 Then the game ends without a bottom half
+
+Given a count of 1-2 and a batter who strikes out (or walks, or puts the ball in play)
+When the plate appearance ends
+Then the next batter's count is 0-0, and outs, bases and score reflect the play
+
+Given bottom of the 9th, tied, runner on 3rd, 1 out
+When the batter singles
+Then the game ends immediately as a walk-off; the half-inning does not continue
 ```
 
 ---
@@ -272,14 +294,21 @@ standings table is full.
 The opponent uses the same engine and the same read. Its policy:
 
 ```
-if read == Likely ball and strikes < 2:   Take
-elif strikes == 2:                         Contact
-elif balls >= 2 and read == Likely strike: Power
-else:                                      Contact (p 0.6) / Power (p 0.4)
+if strikes == 2:            Take if read == Likely ball, else Contact
+elif balls == 3:            Take                      # never swing 3-0 or 3-1
+elif read == Likely ball:   Take
+elif read == Likely strike: Power if balls >= 2, else Contact (p 0.6) / Power (p 0.4)
+elif strikes == 0:          Take                      # first-pitch coin flip: look
+else:                       Contact (p 0.6) / Power (p 0.4)
 ```
 
-This is deliberately a reasonable-but-beatable policy so a thoughtful
-player is slightly better than the sim.
+The policy is count-aware on purpose. A policy that only takes on a
+`Likely ball` read can never walk, because the count modifiers push the
+read toward `Likely strike` exactly as balls accumulate. This policy is
+fixed; tuning does not change it.
+
+It is deliberately reasonable-but-beatable so a thoughtful player is
+slightly better than the sim.
 
 ---
 
@@ -381,10 +410,34 @@ opponent policy on both sides (so both teams play "sensibly"), league-wide:
 The last two together give the tap budget: about 16 to 18 taps per
 half-inning, plus a couple of navigation taps.
 
-Also check that a player using a simple "always Contact" policy neither
-dominates nor gets crushed: their run rate should sit within 10% of the
-sim policy. If mashing one button is optimal, the Power row needs more
-upside or the Contact row more outs.
+### 7.1 Policy matrix (exploit guards)
+
+The bands above describe the league. They say nothing about whether a
+human can break the game by pressing one button. So the tuning script also
+plays each policy below head-to-head against the §5.4 sim policy,
+alternating home and away, and reports the policy's runs as a percentage
+of the sim's. Every row must pass; a run is not PASS otherwise.
+
+| Policy | Runs vs sim | Why |
+|---|---|---|
+| Always Take | ≤ 60% | Walking must not be free |
+| Always Contact | 60–110% | One button must not dominate or be useless |
+| Always Power | ≤ 110% | Same |
+| Take until two strikes, then Contact | ≤ 110% | The obvious "patient" exploit |
+| Take unless `Likely strike` (Power); Contact with two strikes | 95–130% | The intended thoughtful play should win, modestly |
+
+If the bands and the matrix cannot both be satisfied, report the conflict
+with numbers. Do not pick one and call it done.
+
+### 7.2 What tuning may touch
+
+- `BASE_ZONE` within 0.42–0.56.
+- The swing table (§3.4) within its stated ranges.
+- The batted-ball table (§3.5) within its stated ranges.
+- Base-running probabilities (§4) by at most ±0.15.
+
+Not tunable: the count modifiers, the read thresholds, the rating formula,
+the §5.4 policy. Those define what the game is.
 
 ---
 
