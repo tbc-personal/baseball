@@ -288,7 +288,7 @@ export function App() {
     return (
       <SeasonScreen
         gamesPlayed={gamesPlayed}
-        standings={standingsTable(appState.season)}
+        standings={standingsTable(appState.season, appState.teamName)}
         ownTeamId={HERONS_TEAM_ID}
         batting={appState.season.batterStats.map((s) => {
           const b = teamById(HERONS_TEAM_ID).batters.find((x) => x.id === s.batterId)
@@ -457,7 +457,7 @@ export function App() {
   }
 
   // Home
-  const standings = standingsTable(appState.season)
+  const standings = standingsTable(appState.season, appState.teamName)
   const gamesPlayed = appState.season.schedule.filter((g) => g.played).length
   const ownRecord = standings.find((r) => r.teamId === HERONS_TEAM_ID)
   const nextScheduled = appState.season.schedule.find((g) => !g.played)

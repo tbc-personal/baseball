@@ -8,6 +8,7 @@ import {
   onBasePercentage,
   sluggingPercentage,
   standingsTable,
+  shortenTeamName,
   recordGameResult,
   checkMilestones,
   simulateSeason,
@@ -254,6 +255,33 @@ describe('standingsTable', () => {
     expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)))
   })
 
+  it('shows the renamed team in the standings, full and short', () => {
+    const season = createSeason(1)
+    const table = standingsTable(season, 'Portland Pickles')
+    const own = table.find((r) => r.teamId === 'herons')
+    expect(own?.teamName).toBe('Portland Pickles')
+    expect(own?.teamShortName).toBe('Pickles')
+    // The other six are untouched.
+    expect(table.filter((r) => r.teamId !== 'herons').map((r) => r.teamName)).toContain('Ashford Wrens')
+  })
+
+  it('falls back to the built-in name when no override is given or it is blank', () => {
+    const season = createSeason(1)
+    for (const override of [undefined, '', '   ']) {
+      const own = standingsTable(season, override).find((r) => r.teamId === 'herons')
+      expect(own?.teamName).toBe('Harbor Herons')
+      expect(own?.teamShortName).toBe('Herons')
+    }
+  })
+
+  it('re-sorts on the renamed team, so a rename moves the row', () => {
+    const season = createSeason(1)
+    const ids = (name?: string) => standingsTable(season, name).map((r) => r.teamId)
+    // "Herons" sorts third of seven; "Albatrosses" sorts first.
+    expect(ids()[2]).toBe('herons')
+    expect(ids('Anchorage Albatrosses')[0]).toBe('herons')
+  })
+
   it('the alphabetical tiebreak is only a tiebreak: a win still outranks it', () => {
     const season = createSeason(1)
     // Give the alphabetically *last* team the only win in the league.
@@ -452,5 +480,20 @@ describe('simulateSeason: a full 20-game season runs headless and is internally 
   it('a different seed produces a different season', () => {
     const other = simulateSeason(2027)
     expect(other).not.toEqual(season)
+  })
+})
+
+describe('shortenTeamName', () => {
+  it('takes the last word, matching how the built-in names are shaped', () => {
+    expect(shortenTeamName('Portland Pickles')).toBe('Pickles')
+    expect(shortenTeamName('Marrow Creek Cranes')).toBe('Cranes')
+  })
+
+  it('uses a one-word name whole', () => {
+    expect(shortenTeamName('Herons')).toBe('Herons')
+  })
+
+  it('tolerates stray whitespace', () => {
+    expect(shortenTeamName('  Harbor   Herons  ')).toBe('Herons')
   })
 })
