@@ -293,6 +293,8 @@ function winPct(record: TeamRecord): number {
 
 export interface StandingsRow extends TeamRecord {
   teamName: string
+  /** Short name, for the narrow Season table (docs/mockups/Season.dc.html). */
+  teamShortName: string
   winPct: number
   gamesBack: number
   runDifferential: number
@@ -319,6 +321,7 @@ export function standingsTable(season: SeasonState): StandingsRow[] {
   return sorted.map((record) => ({
     ...record,
     teamName: lookup[record.teamId]?.name ?? record.teamId,
+    teamShortName: lookup[record.teamId]?.shortName ?? record.teamId,
     winPct: winPct(record),
     gamesBack: leader ? (leader.wins - record.wins + (record.losses - leader.losses)) / GAMES_BACK_DIVISOR : 0,
     runDifferential: record.runsFor - record.runsAgainst,

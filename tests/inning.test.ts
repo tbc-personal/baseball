@@ -405,3 +405,15 @@ describe('walk-off', () => {
     expect(next.isOver).toBe(true)
   })
 })
+
+describe('line score', () => {
+  it('records a 0 for a scoreless half-inning that was played', () => {
+    const state = makeGameState({ inning: 1, half: 'top', outs: 2, count: { balls: 0, strikes: 2 }, currentPitch: { pZone: 0.9 } })
+    // A called third strike: the half ends having scored nothing.
+    const { state: next } = applyPitch(state, 'Take', teams, stub([0.0]))
+    expect(next.lineScore.away[0]).toBe(0)
+    expect(next.lineScore.away.length).toBe(1)
+    // The home side has not batted yet, so it has no column at all.
+    expect(next.lineScore.home.length).toBe(0)
+  })
+})

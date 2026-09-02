@@ -8,10 +8,11 @@
  * rng.ts.
  */
 
-import type { Bases, Choice, Count, GameState, ReadBucket, Team } from './types'
+import type { Bases, Choice, Count, GameState, HalfInning, ReadBucket, Team, TeamId } from './types'
 import type { Rng } from './rng'
 import { rngBool } from './rng'
 import { applyPitch } from './inning'
+import type { PlateAppearanceEvent } from './inning'
 import type { Teams } from './inning'
 import {
   OPPONENT_POLICY_CONTACT_PROBABILITY,
@@ -145,4 +146,86 @@ export function simulateGameBetween(home: Team, away: Team, rng: Rng): SimGameOu
   const winnerRuns = loserRuns + margin
 
   return homeWins ? { homeScore: winnerRuns, awayScore: loserRuns } : { homeScore: loserRuns, awayScore: winnerRuns }
+}
+
+// ============================================================================
+// Half-inning recaps (for the between-innings screen, GAME_DESIGN.md 2)
+// ============================================================================
+
+/** One line of a half-inning recap, with what the mockup's gutter column shows. */
+export interface PlayLogEntry {
+  text: string
+  /** Outs recorded after this play; the gutter shows this, or a dash for none. */
+  outsAfter: number
+  /** Runs that scored on this play; the gutter marker turns red when non-zero. */
+  runsScored: number
+}
+
+export interface HalfInningRecap {
+  half: HalfInning
+  inning: number
+  battingTeamId: TeamId
+  log: PlayLogEntry[]
+  runs: number
+  hits: number
+  leftOnBase: number
+}
+
+const HIT_EVENTS: ReadonlySet<string> = new Set(['single', 'double', 'triple', 'hr', 'bunt-single'])
+
+/** Whether a plate appearance counted as a hit. The one place this is decided. */
+export function isHitEvent(event: PlateAppearanceEvent | null): boolean {
+  return event !== null && HIT_EVENTS.has(event)
+}
+
+/**
+ * Simulate one half-inning with the section 5.4 policy, capturing the play
+ * log as it goes. `simulateHalfInning` returns only the end state, and the
+ * transition clears `plays`, so the recap has to be collected here.
+ */
+export function simulateHalfInningWithRecap(
+  state: GameState,
+  teams: Teams,
+  rng: Rng
+): { state: GameState; recap: HalfInningRecap } {
+  const startHalf = state.half
+  const startInning = state.inning
+  const battingTeamId = startHalf === 'top' ? state.awayTeamId : state.homeTeamId
+
+  const log: PlayLogEntry[] = []
+  let runs = 0
+  let hits = 0
+  let leftOnBase = 0
+  let current = state
+  let pitches = 0
+
+  while (!current.isOver && current.half === startHalf && current.inning === startInning) {
+    if (pitches >= MAX_PITCHES_PER_HALF_INNING) {
+      throw new Error(
+        `simulateHalfInningWithRecap: exceeded ${MAX_PITCHES_PER_HALF_INNING} pitches without ending the half-inning`
+      )
+    }
+    const outsBefore = current.outs
+    const choice = opponentChoice(current.currentPitch.displayedBucket, current.count, current.bases, current.outs, rng)
+    const { state: next, result } = applyPitch(current, choice, teams, rng)
+
+    if (result.play !== null) {
+      log.push({
+        text: result.play,
+        outsAfter: outsBefore + result.outsAdded,
+        runsScored: result.runsScored.length
+      })
+    }
+    runs += result.runsScored.length
+    if (isHitEvent(result.event)) hits += 1
+    if (result.runnersLeftOnBase !== null) leftOnBase = result.runnersLeftOnBase
+
+    current = next
+    pitches += 1
+  }
+
+  return {
+    state: current,
+    recap: { half: startHalf, inning: startInning, battingTeamId, log, runs, hits, leftOnBase }
+  }
 }

@@ -59,6 +59,12 @@ export interface ApplyPitchResult {
   outsAdded: number
   /** Did this pitch end the half-inning (the 3rd out)? */
   halfInningEnded: boolean
+  /**
+   * Runners stranded when this pitch ended the half-inning; null otherwise.
+   * Counted here rather than in the UI because the bases are cleared by the
+   * transition, so it cannot be recovered from the returned state.
+   */
+  runnersLeftOnBase: number | null
   /** Did this pitch end the game? */
   gameEnded: boolean
   /** The human-readable line added to the play log (if any) */
@@ -276,8 +282,10 @@ export function applyPitch(state: GameState, choice: Choice, teams: Teams, rng: 
     } else {
       awayScore += runsScored.length
     }
-    lineScore = addToLineScore(lineScore, battingIdx, state.inning, runsScored.length)
   }
+  // Always record the column, even for a scoreless inning: an inning that was
+  // played reads 0 on the line score, while one not yet reached stays absent.
+  lineScore = addToLineScore(lineScore, battingIdx, state.inning, runsScored.length)
   const isHit = event === 'single' || event === 'double' || event === 'triple' || event === 'hr' || event === 'bunt-single'
   if (isHit) {
     hits = { ...hits, [battingIdx]: hits[battingIdx] + 1 }
@@ -328,14 +336,18 @@ export function applyPitch(state: GameState, choice: Choice, teams: Teams, rng: 
         runsScored,
         outsAdded: outs - state.outs,
         halfInningEnded: false,
+        runnersLeftOnBase: null,
         gameEnded: true,
         play
       }
     }
   }
 
+  let runnersLeftOnBase: number | null = null
+
   if (outs >= OUTS_PER_HALF_INNING) {
     halfInningEnded = true
+    runnersLeftOnBase = [bases.first, bases.second, bases.third].filter((r) => r !== null).length
     const transition = endHalfInning(nextState, teams, rng)
     nextState = transition.state
     gameEnded = transition.gameEnded
@@ -354,6 +366,7 @@ export function applyPitch(state: GameState, choice: Choice, teams: Teams, rng: 
       runsScored,
       outsAdded: outs - state.outs,
       halfInningEnded,
+      runnersLeftOnBase,
       gameEnded,
       play
     }

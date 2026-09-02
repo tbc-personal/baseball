@@ -135,3 +135,155 @@ export function formatAverage(rate: number): string {
 export function seasonLine(stats: BatterStats): string {
   return `${formatAverage(battingAverage(stats))} · ${stats.hr} HR`
 }
+
+// ============================================================================
+// T8: presentation logic for the home, between-innings, season and settings
+// screens. Pure functions only -- components stay thin enough that testing
+// these is honest coverage of the screens' behaviour.
+// ============================================================================
+
+/**
+ * The gutter marker beside a play in the between-innings recap
+ * (docs/mockups/Between.dc.html): the out number, or a dash when the play
+ * recorded no out. It reads red when the play scored.
+ */
+export function playGutter(entry: { outsAfter: number; runsScored: number; }, outsBefore: number): {
+  marker: string
+  scored: boolean
+} {
+  const recordedAnOut = entry.outsAfter > outsBefore
+  return { marker: recordedAnOut ? String(entry.outsAfter) : '—', scored: entry.runsScored > 0 }
+}
+
+/** "1 run · 2 hits · 1 LOB", pluralised, as the mockup's half-inning summary. */
+export function halfInningSummary(runs: number, hits: number, leftOnBase: number): string {
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+  return `${plural(runs, 'run')} · ${plural(hits, 'hit')} · ${leftOnBase} LOB`
+}
+
+/**
+ * The home screen's one primary action (GAME_DESIGN.md 2: the home screen
+ * always shows exactly one).
+ */
+export type PrimaryAction =
+  | { kind: 'resume'; label: string }
+  | { kind: 'play-half'; label: string }
+  | { kind: 'next-game'; label: string }
+  | { kind: 'season-over'; label: string }
+
+export function primaryAction(opts: {
+  seasonComplete: boolean
+  hasGameInProgress: boolean
+  midAtBat: boolean
+  half: HalfInning
+  inning: number
+}): PrimaryAction {
+  if (opts.seasonComplete) return { kind: 'season-over', label: 'Season over' }
+  if (!opts.hasGameInProgress) return { kind: 'next-game', label: 'Start the next game' }
+  const where = `the ${ordinal(opts.inning)}`
+  if (opts.midAtBat) return { kind: 'resume', label: `Pick up ${where}` }
+  return { kind: 'play-half', label: `Play ${where}` }
+}
+
+/** "Bottom of the 4th. Two on, one out, Achterberg up. You left it at a 2-1 count." */
+export function resumeSentence(opts: {
+  half: HalfInning
+  inning: number
+  runnersOn: number
+  outs: number
+  batterSurname: string
+  balls: number
+  strikes: number
+}): string {
+  const words = ['No', 'One', 'Two', 'Three']
+  const side = opts.half === 'top' ? 'Top' : 'Bottom'
+  const onBase = opts.runnersOn === 0 ? 'Nobody on' : `${words[opts.runnersOn]} on`
+  const outs = `${words[opts.outs].toLowerCase()} out${opts.outs === 1 ? '' : 's'}`
+  const count = opts.balls === 0 && opts.strikes === 0 ? '' : ` You left it at a ${opts.balls}–${opts.strikes} count.`
+  return `${side} of the ${ordinal(opts.inning)}. ${onBase}, ${outs}, ${opts.batterSurname} up.${count}`
+}
+
+/** Batting averages print without a leading zero: .281, and .000 at no at-bats. */
+export function formatRate(value: number): string {
+  return value.toFixed(3).replace(/^0\./, '.')
+}
+
+/** Run differential prints signed, with a true minus sign, per the Season mockup. */
+export function formatRunDifferential(value: number): string {
+  if (value > 0) return `+${value}`
+  if (value < 0) return `−${Math.abs(value)}`
+  return '0'
+}
+
+/** Games back: a dash for the leader, otherwise the half-game count. */
+export function formatGamesBack(value: number): string {
+  return value === 0 ? '—' : String(value)
+}
+
+/** The save-code box shows the head, the tail and a length, so a short paste is visible. */
+export function saveCodeExcerpt(code: string, edge = 28): string {
+  if (code.length <= edge * 2 + 1) return code
+  return `${code.slice(0, edge)}…${code.slice(-edge)}`
+}
+
+export function formatCharacterCount(n: number): string {
+  return `${n.toLocaleString('en-US')} characters`
+}
+
+/** "saved 2 hours ago" for the paste preview line. */
+export function relativeTime(fromIso: string, now: number = Date.now()): string {
+  const then = Date.parse(fromIso)
+  if (Number.isNaN(then)) return 'at an unknown time'
+  const seconds = Math.max(0, Math.round((now - then) / 1000))
+  if (seconds < 60) return 'just now'
+  const minutes = Math.round(seconds / 60)
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`
+  const hours = Math.round(minutes / 60)
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`
+  const days = Math.round(hours / 24)
+  return `${days} day${days === 1 ? '' : 's'} ago`
+}
+
+/**
+ * The paste-preview line from section 6.1: "Game 7 · Herons 4–2 · bottom 4th".
+ * `previewOf` reports facts; the wording is assembled here.
+ */
+export function previewSummary(p: {
+  teamName: string
+  gameNumber: number | null
+  inGame: boolean
+  half: HalfInning | null
+  inning: number | null
+  ownScore: number | null
+  opponentScore: number | null
+}): string {
+  const parts: string[] = []
+  if (p.gameNumber !== null) parts.push(`Game ${p.gameNumber}`)
+  if (p.inGame && p.ownScore !== null && p.opponentScore !== null) {
+    parts.push(`${p.teamName} ${p.ownScore}–${p.opponentScore}`)
+  } else {
+    parts.push(p.teamName)
+  }
+  if (p.inGame && p.half !== null && p.inning !== null) {
+    parts.push(`${p.half === 'top' ? 'top' : 'bottom'} ${ordinal(p.inning)}`)
+  } else {
+    parts.push('between games')
+  }
+  return parts.join(' · ')
+}
+
+/**
+ * The two-line prose summary of a simulated half-inning
+ * (docs/mockups/Between.dc.html shows a recap, not a play-by-play dump).
+ * Built from the recap's numbers so it stays short however long the inning.
+ */
+export function describeHalfInning(r: { runs: number; hits: number; leftOnBase: number; plays: number }): string {
+  const runs = r.runs === 0 ? 'No runs.' : `${r.runs} run${r.runs === 1 ? '' : 's'}.`
+  if (r.hits === 0 && r.leftOnBase === 0 && r.runs === 0) {
+    return r.plays <= 3 ? 'Three up, three down. No runs.' : 'Nobody reached. No runs.'
+  }
+  const hits = r.hits === 0 ? 'No hits' : `${r.hits} hit${r.hits === 1 ? '' : 's'}`
+  const stranded =
+    r.leftOnBase === 0 ? '' : ` ${r.leftOnBase} left on base.`
+  return `${hits} in ${r.plays} batter${r.plays === 1 ? '' : 's'}. ${runs}${stranded}`
+}
