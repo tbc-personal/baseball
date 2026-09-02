@@ -311,10 +311,17 @@ export interface StandingsRow extends TeamRecord {
  * a fresh season, where every team is 0-0 with a run differential of 0,
  * reads down the table in alphabetical order instead of an order that
  * looks arbitrary to the player.
+ *
+ * It sorts on the SHORT name because the full standings table
+ * (Season.dc.html, SeasonScreen) is the one that shows all seven teams and
+ * the one REVIEW_1.md called arbitrary, and it prints short names. The
+ * home screen's four-row preview prints full names, so at 0-0 that shorter
+ * list is ordered by bird name rather than by the string it displays;
+ * the two names cannot both sort alphabetically at once.
  */
 export function standingsTable(season: SeasonState): StandingsRow[] {
   const lookup = teamLookup()
-  const nameOf = (id: TeamId): string => lookup[id]?.name ?? id
+  const nameOf = (id: TeamId): string => lookup[id]?.shortName ?? lookup[id]?.name ?? id
   const sorted = [...season.standings].sort((a, b) => {
     const pctDiff = winPct(b) - winPct(a)
     if (pctDiff !== 0) return pctDiff

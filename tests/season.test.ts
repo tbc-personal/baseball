@@ -248,9 +248,9 @@ describe('standingsTable', () => {
     }
   })
 
-  it('sorts a fresh 0-0 season alphabetically by team name', () => {
+  it('sorts a fresh 0-0 season alphabetically by the short name the standings table prints', () => {
     const season = createSeason(1)
-    const names = standingsTable(season).map((r) => r.teamName)
+    const names = standingsTable(season).map((r) => r.teamShortName)
     expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)))
   })
 
@@ -265,7 +265,7 @@ describe('standingsTable', () => {
     const table = standingsTable({ ...season, standings })
     expect(table[0].teamId).toBe(lastAlphabetically)
     // The teams still tied at 0-0 below it stay in alphabetical order.
-    const tiedNames = table.slice(1).map((r) => r.teamName)
+    const tiedNames = table.slice(1).map((r) => r.teamShortName)
     expect(tiedNames).toEqual([...tiedNames].sort((a, b) => a.localeCompare(b)))
   })
 })

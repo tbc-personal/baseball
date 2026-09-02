@@ -64,6 +64,13 @@ interface BetweenData {
   opponent: HalfInningRecap | null
   gameEnded: boolean
   milestones: string[]
+  /**
+   * The finished game, kept only when it ended on this half. appState's
+   * currentGame is cleared the moment a game is over, so without this the
+   * between-innings screen would draw the final line score from nothing --
+   * every inning blank, 0-0, and the two teams in the wrong rows.
+   */
+  finalGame: GameState | null
 }
 
 function deviceLabel(): string {
@@ -157,7 +164,7 @@ export function App() {
 
     if (recap !== null && state.isOver === false && battingSideOf(state) === heronsSideOf(state) && recap.log.length > 0) {
       // Opponent batted before our first turn of this visit; show it, then play.
-      setBetween({ yours: emptyRecap(state), opponent: recap, gameEnded: false, milestones: [] })
+      setBetween({ yours: emptyRecap(state), opponent: recap, gameEnded: false, milestones: [], finalGame: null })
       setScreen('between')
       return
     }
@@ -232,7 +239,13 @@ export function App() {
     persist(next)
     setYourPlays([])
     setYourHits(0)
-    setBetween({ yours, opponent: opponentRecap, gameEnded: nextGame.isOver, milestones })
+    setBetween({
+      yours,
+      opponent: opponentRecap,
+      gameEnded: nextGame.isOver,
+      milestones,
+      finalGame: nextGame.isOver ? nextGame : null
+    })
     setScreen('between')
   }
 
@@ -314,7 +327,7 @@ export function App() {
   if (screen === 'between' && between !== null) {
     const b = between
     const shown = b.opponent ?? b.yours
-    const lineScoreGame = game ?? null
+    const lineScoreGame = game ?? b.finalGame
     return (
       <BetweenScreen
         milestones={b.milestones}
