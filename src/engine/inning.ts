@@ -21,6 +21,14 @@ import { INNINGS_PER_GAME, OUTS_PER_HALF_INNING, BALLS_FOR_WALK, STRIKES_FOR_STR
 
 const EMPTY_BASES: Bases = { first: null, second: null, third: null }
 
+/**
+ * This game's strikeouts per side, reading a game saved before the counter
+ * existed as 0-0 rather than undefined. See GameState.strikeouts.
+ */
+export function strikeoutsOf(state: GameState): { home: number; away: number } {
+  return state.strikeouts ?? { home: 0, away: 0 }
+}
+
 export interface Teams {
   home: Team
   away: Team
@@ -297,6 +305,10 @@ export function applyPitch(state: GameState, choice: Choice, teams: Teams, rng: 
   if (isHit) {
     hits = { ...hits, [battingIdx]: hits[battingIdx] + 1 }
   }
+  let strikeouts = strikeoutsOf(state)
+  if (event === 'strikeout') {
+    strikeouts = { ...strikeouts, [battingIdx]: strikeouts[battingIdx] + 1 }
+  }
 
   // Advance the batting order only when the plate appearance ended.
   let currentBatterIndex = state.currentBatterIndex
@@ -315,6 +327,7 @@ export function applyPitch(state: GameState, choice: Choice, teams: Teams, rng: 
     homeScore,
     awayScore,
     hits,
+    strikeouts,
     lineScore,
     currentBatterIndex,
     plays,
@@ -458,6 +471,7 @@ export function createGame(args: CreateGameArgs): GameState {
     awayScore: 0,
     lineScore: { home: [], away: [] },
     hits: { home: 0, away: 0 },
+    strikeouts: { home: 0, away: 0 },
     currentBatterIndex: { home: 0, away: 0 },
     rngState: rng.state(),
     plays: [],

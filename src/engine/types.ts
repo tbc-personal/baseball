@@ -172,6 +172,20 @@ export interface GameState {
     away: number
   }
 
+  /**
+   * Strikeouts in THIS game, per side.
+   *
+   * Optional because it was added after 0.1 shipped. A game saved by 0.1
+   * carries no count, and reading absent as zero lets that save resume and
+   * start counting rather than being invalidated by a schema migration
+   * mid-game. Every game created by this build has it. Use strikeoutsOf()
+   * rather than reading it directly.
+   */
+  strikeouts?: {
+    home: number
+    away: number
+  }
+
   // Each side keeps its own place in the batting order across innings
   currentBatterIndex: {
     home: number

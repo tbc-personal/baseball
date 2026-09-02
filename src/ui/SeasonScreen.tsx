@@ -12,7 +12,7 @@ import type { StandingsRow } from '../engine/season'
 import { battingAverage, onBasePercentage } from '../engine/season'
 import { formatGamesBack, formatRate, formatRunDifferential } from './format'
 
-export type BattingSortKey = 'avg' | 'hr' | 'rbi' | 'obp'
+export type BattingSortKey = 'avg' | 'hr' | 'rbi' | 'obp' | 'k'
 
 export interface BattingRow {
   batterId: string
@@ -29,7 +29,7 @@ export interface SeasonScreenProps {
 }
 
 const STANDINGS_GRID = 'minmax(0, 1fr) 30px 30px 36px 44px 56px'
-const BATTING_GRID = 'minmax(0, 1fr) 50px 34px 40px 50px'
+const BATTING_GRID = 'minmax(0, 1fr) 50px 30px 36px 50px 30px'
 
 export function sortBatting(rows: BattingRow[], key: BattingSortKey): BattingRow[] {
   const value = (r: BattingRow): number => {
@@ -42,6 +42,8 @@ export function sortBatting(rows: BattingRow[], key: BattingSortKey): BattingRow
         return r.stats.hr
       case 'rbi':
         return r.stats.rbi
+      case 'k':
+        return r.stats.k
     }
   }
   return [...rows].sort((a, b) => value(b) - value(a) || a.label.localeCompare(b.label))
@@ -150,6 +152,7 @@ export function SeasonScreen(props: SeasonScreenProps) {
           {sortHeader('hr', 'HR')}
           {sortHeader('rbi', 'RBI')}
           {sortHeader('obp', 'OBP')}
+          {sortHeader('k', 'K')}
         </div>
         {sorted.map((r) => (
           <div
@@ -168,6 +171,7 @@ export function SeasonScreen(props: SeasonScreenProps) {
             <span>{r.stats.hr}</span>
             <span>{r.stats.rbi}</span>
             <span>{formatRate(onBasePercentage(r.stats))}</span>
+            <span>{r.stats.k}</span>
           </div>
         ))}
       </div>

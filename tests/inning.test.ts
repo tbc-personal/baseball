@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { applyPitch, createGame } from '../src/engine/inning'
+import { applyPitch, createGame, strikeoutsOf } from '../src/engine/inning'
 import { makeRng } from '../src/engine/rng'
 import type { Teams } from '../src/engine/inning'
 import { StubRng, PAD, makeTeam, makeGameState } from './fixtures'
@@ -528,5 +528,51 @@ describe('line score', () => {
     expect(next.lineScore.away.length).toBe(1)
     // The home side has not batted yet, so it has no column at all.
     expect(next.lineScore.home.length).toBe(0)
+  })
+})
+
+describe('per-game strikeout counter', () => {
+  it('counts a strikeout against the batting side only', () => {
+    const state = makeGameState({ count: { balls: 0, strikes: 2 }, currentPitch: { pZone: 0.9 }, half: 'top' })
+    const { state: next, result } = applyPitch(state, 'Take', teams, stub([0.0]))
+    expect(result.event).toBe('strikeout')
+    expect(strikeoutsOf(next)).toEqual({ home: 0, away: 1 })
+  })
+
+  it('counts against the home side in the bottom half', () => {
+    const state = makeGameState({ count: { balls: 0, strikes: 2 }, currentPitch: { pZone: 0.9 }, half: 'bottom' })
+    const { state: next } = applyPitch(state, 'Take', teams, stub([0.0]))
+    expect(strikeoutsOf(next)).toEqual({ home: 1, away: 0 })
+  })
+
+  it('leaves the count alone on a plate appearance that is not a strikeout', () => {
+    const state = makeGameState({ count: { balls: 3, strikes: 0 }, currentPitch: { pZone: 0.1 }, half: 'top' })
+    const { state: next, result } = applyPitch(state, 'Take', teams, stub([0.9]))
+    expect(result.event).toBe('walk')
+    expect(strikeoutsOf(next)).toEqual({ home: 0, away: 0 })
+  })
+
+  it('accumulates across a half-inning rather than resetting with the count', () => {
+    let state = makeGameState({ count: { balls: 0, strikes: 2 }, currentPitch: { pZone: 0.9 }, half: 'top' })
+    for (let i = 0; i < 2; i++) {
+      const { state: next } = applyPitch({ ...state, count: { balls: 0, strikes: 2 } }, 'Take', teams, stub([0.0]))
+      state = next
+    }
+    expect(strikeoutsOf(state).away).toBe(2)
+  })
+
+  it('createGame starts a game at zero, and strikeoutsOf reads a pre-0.1.1 save as zero', () => {
+    const fresh = createGame({
+      gameIndex: 0,
+      homeTeam: home,
+      awayTeam: away,
+      homePitcher: home.pitchers[0],
+      awayPitcher: away.pitchers[0],
+      seed: 1
+    })
+    expect(strikeoutsOf(fresh)).toEqual({ home: 0, away: 0 })
+    // A game saved before the counter existed has no field at all.
+    const legacy = { ...fresh, strikeouts: undefined }
+    expect(strikeoutsOf(legacy)).toEqual({ home: 0, away: 0 })
   })
 })
