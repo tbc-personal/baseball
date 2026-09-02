@@ -164,3 +164,145 @@ npm run dev   # dev server at http://localhost:5173/baseball/
 npm test      # 269 tests
 npm run tune  # 10,000 simulated games, printed against the section 7 bands
 ```
+
+---
+
+# Round 2 (after REVIEW_1.md)
+
+Seven commits, R1 through R7. R1–R5 are the items in
+`HANDOFF_PROMPT_2.md`; R6 and R7 are a rule change the owner asked for
+mid-round and the retune it required.
+
+## 1. What changed
+
+**R1 — the count reset.** `applyPitch` reset the count only at the end of a
+half-inning, so the next batter inherited the previous batter's count: 0-2
+after a strikeout at 0-2, 3-0 after a walk. §3.4 says the count is per
+plate appearance. Fixed, with the two new §4.1 scenario tests and a
+pitch-by-pitch trace test that plays an always-Take half-inning and asserts
+every plate appearance lasts at least three pitches — the hard floor when
+every pitch is taken. All three fail without the fix; I checked by
+reverting it.
+
+**R2 — the revised rules.** `COUNT_MOD` back to §3.2 (the ball-side entries
+had been zeroed), `BASE_ZONE_PROBABILITY` to 0.48, `READ_BUCKET_LIKELY_BALL`
+to 0.45, both outcome tables to their §3.4/§3.5 values, base running to §4,
+and `opponentChoice` to the new count-aware §5.4 policy. Only the §5.4 tests
+encoded the old values; nothing else in the suite hardcoded a tuned number.
+
+**R3 — the policy matrix.** `npm run tune` prints the §7.1 matrix after the
+band table: five policies head-to-head against the sim policy, alternating
+home and away *per game* (the old always-Contact check alternated once per
+21-game pairing cycle), with each policy's own walk rate and pitches per
+plate appearance from a mirror batch. Overall PASS now needs every band and
+every matrix row.
+
+**R4 — the retune, within §7.2.** Roughly 250 configurations measured across
+the legal space. Best achievable: three of eight bands, and a matrix that
+passed on the default seed with two rows inside a point of their ceiling and
+failing on a re-seed. Committed as the closest result, with the conflict
+documented.
+
+**R6 — the two-strike rule change (owner decision).** §3.2's two-strike
+modifiers went from 0-2 −0.20 / 1-2 −0.12 / 2-2 −0.05 to −0.08 / −0.05 /
+−0.02, and `p_zone` gained `challenge_mod = -adj(Contact) * CHALLENGE_WEIGHT`
+so a pitcher challenges a weak-contact hitter and works around a dangerous
+one. `zoneProbability` takes the batter for this; it is the only
+batter-dependent term. `GAME_DESIGN.md` §3.2 and §7.2 are updated to match.
+
+**R7 — the retune under the new rule.** `BASE_ZONE_PROBABILITY` 0.515,
+`CHALLENGE_WEIGHT` 0.50; the tables are unchanged from R4.
+
+**R5 — the two UI items.** The between-innings screen renders a milestone
+band when one fired, and `standingsTable`'s last tiebreak is the team's
+display name rather than its id, so a fresh 0-0 season reads alphabetically.
+
+## 2. Deviations from spec
+
+**§3.2 two-strike modifiers and the challenge term (R6).** A real change to
+a table §7.2 marks non-tunable, made on the owner's explicit instruction
+after they saw the strikeout diagnosis. `GAME_DESIGN.md` §3.2 is rewritten
+to state the new rule, and `CHALLENGE_WEIGHT` is added to §7.2's tunable
+list, so the spec and the code agree. Everything in `TUNING.md` from R4
+downwards is the evidence that the change was necessary and not merely
+convenient.
+
+**`REVIEW_1.md`'s predicted numbers do not reproduce.** The review states
+that with the bug fixed and the spec's constants restored, always-Take
+drops to 17% of the sim. Measured, it is 142%. The review's diagnosis of the
+*bug* was exactly right; its forecast of the post-fix matrix was not, because
+the sim policy at the spec's starting values strikes out 41% of the time and
+a batter who never swings beats that. Worth flagging since the review used
+that number as evidence the design was sound.
+
+**Everything else** is as round 1 left it. The round-1 deviations recorded
+above — the walk-off reading, the pitcher pitch-count label, short team names
+in standings, `previewOf` returning data — all still stand. The one that does
+not is "ball-side count modifiers zeroed": those are back at their §3.2
+values.
+
+## 3. Ambiguities resolved
+
+**Milestone wording.** §6 names the milestones and asks for a line between
+innings, but neither §6 nor `Between.dc.html` specifies the text, so the
+labels ("First home run of the season", "Winning season clinched", and so
+on) are mine and live in `format.ts` with the other presentation logic.
+Please review them for voice. An unknown id renders as the raw id rather
+than being silently dropped.
+
+**The walk arm of the new §4.1 count-reset scenario.** The scenario reads
+"Given a count of 1-2 and a batter who strikes out (or walks, or puts the
+ball in play)". A walk cannot happen on one pitch from 1-2, so that arm of
+the test starts at 3-2, the latest count it can reach ball four from. The
+strikeout and ball-in-play arms are at 1-2 as written.
+
+**`CHALLENGE_WEIGHT` range.** The owner specified the behaviour, not the
+number. 0.40 is written into §3.2 as the starting value with a 0.20–0.60
+tuning range, chosen so the term spans roughly ±0.12 of `p_zone` across the
+20–80 rating scale — comparable to the pitcher tendency modifier (±0.08) and
+smaller than the biggest count modifier (+0.20). Tuned to 0.50.
+
+## 4. Tuning
+
+See [TUNING.md](TUNING.md). In one paragraph: at `BASE_ZONE_PROBABILITY`
+0.515 and `CHALLENGE_WEIGHT` 0.50, with the swing table at
+`0.50/0.40/0.10` (Contact zone), `0.30/0.50/0.20` (Contact ball),
+`0.30/0.50/0.20` (Power zone) and `0.10/0.50/0.40` (Power ball), the
+batted-ball rows at `0.5607/0.3121/0.0809/0.0116/0.0347`,
+`0.825/0.14/0.028/0.0035/0.0035`, `0.5422/0.1635/0.1308/0.0109/0.1526` and
+`0.818/0.091/0.049/0.007/0.035`, and base running at 0.78 / 0.40 / 0.58
+(double play and sacrifice fly unchanged), 10,000 games give runs 4.42,
+average .255, OBP .321, strikeouts 27.9%, walks 8.8%, home runs 1.03,
+pitches per plate appearance 3.72 and plate appearances per half-inning
+4.34 — seven of eight bands, the strikeout rate 2.9 points high — while the
+§7.1 matrix passes every row with margin (always Take 57.6%, always Contact
+97.7%, always Power 103.1%, take-until-two-strikes 95.4%, the reading
+policy 110.6%), and seed 777 reproduces every verdict.
+
+## 5. Known gaps
+
+- **The strikeout band is still missed**, 27.9% against 20–25%. Closing it
+  needs either a further cut to the two-strike modifiers or Power's in-play
+  rate on balls raised, and the second was measured: it buys one point of
+  strikeout rate for seven points of always-Power margin. `TUNING.md` has
+  the numbers and the two honest options.
+- **The matrix has margin but not a lot on one row.** Always Take is 57.6%
+  against a 60% ceiling. Any future engine change should re-run
+  `npm run tune` at 10,000 games on two seeds before being trusted; matrix
+  rows move five or six points between 1,000-game runs, and two candidates
+  were adopted and then withdrawn this round on exactly that mistake.
+- **The challenge term is untested against the UI.** The read shown on the
+  at-bat screen now varies by batter, which is the point, but nobody has
+  played a half-inning by hand to check it reads sensibly rather than just
+  measuring correctly.
+- **Milestone rendering is tested as a pure function, not as DOM.** Same gap
+  round 1 recorded: `@testing-library/preact` is still not a dependency, so
+  `milestoneLine` is unit-tested and the band itself is unrendered in tests.
+- Everything in round 1's "Known gaps" that was not about tuning still
+  applies: no device testing, no Lighthouse run, unverified Pages deploy,
+  Google Fonts never seen in this sandbox.
+
+## 6. How to run
+
+Unchanged from round 1. `npm install`, `npm run dev`, `npm test` (285
+tests), `npm run tune`.
