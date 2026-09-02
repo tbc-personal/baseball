@@ -57,7 +57,7 @@ function countKey(count: Count): string {
   return `${count.balls}-${count.strikes}`
 }
 
-/** p_zone = 0.55 + count_mod + adj(Control) + tendency_mod, clamped to [0.20, 0.90] */
+/** p_zone = BASE_ZONE + count_mod + adj(Control) + tendency_mod, clamped to [0.20, 0.90] */
 export function zoneProbability(count: Count, pitcher: Pitcher): number {
   const countMod = COUNT_MOD[countKey(count)] ?? 0
   const raw = BASE_ZONE_PROBABILITY + countMod + adj(pitcher.control) + tendencyMod(pitcher)

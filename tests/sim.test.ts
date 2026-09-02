@@ -5,7 +5,7 @@ import type { Teams } from '../src/engine/inning'
 import { opponentChoice, simulateHalfInning, simulateGame, teamStrength, winProbability, simulateGameBetween } from '../src/engine/sim'
 import { OPPONENT_POLICY_CONTACT_PROBABILITY, MAX_PITCHES_PER_HALF_INNING } from '../src/engine/constants'
 import { makeTeam, makeBatter } from './fixtures'
-import type { Count, ReadBucket, Bases } from '../src/engine/types'
+import type { ReadBucket, Bases } from '../src/engine/types'
 
 const EMPTY_BASES: Bases = { first: null, second: null, third: null }
 
@@ -14,41 +14,63 @@ const away = makeTeam('away')
 const teams: Teams = { home, away }
 
 describe('opponentChoice (GAME_DESIGN.md 5.4)', () => {
-  it('Likely ball, strikes < 2 -> Take, regardless of rng', () => {
+  it('strikes == 2 -> Take on Likely ball, Contact otherwise', () => {
     const rng = makeRng(1)
-    for (const strikes of [0, 1]) {
-      const count: Count = { balls: 1, strikes }
-      expect(opponentChoice('Likely ball', count, EMPTY_BASES, 0, rng)).toBe('Take')
+    for (let balls = 0; balls <= 3; balls++) {
+      expect(opponentChoice('Likely ball', { balls, strikes: 2 }, EMPTY_BASES, 0, rng)).toBe('Take')
+      expect(opponentChoice('Coin flip', { balls, strikes: 2 }, EMPTY_BASES, 0, rng)).toBe('Contact')
+      expect(opponentChoice('Likely strike', { balls, strikes: 2 }, EMPTY_BASES, 0, rng)).toBe('Contact')
     }
   })
 
-  it('strikes == 2 -> Contact, even with Likely ball or Likely strike', () => {
+  it('balls == 3 with fewer than two strikes -> Take, never swinging 3-0 or 3-1', () => {
     const rng = makeRng(1)
     const buckets: ReadBucket[] = ['Likely ball', 'Coin flip', 'Likely strike']
     for (const read of buckets) {
-      expect(opponentChoice(read, { balls: 0, strikes: 2 }, EMPTY_BASES, 0, rng)).toBe('Contact')
+      for (const strikes of [0, 1]) {
+        expect(opponentChoice(read, { balls: 3, strikes }, EMPTY_BASES, 0, rng)).toBe('Take')
+      }
     }
   })
 
-  it('balls >= 2 and Likely strike (and strikes < 2) -> Power', () => {
+  it('Likely ball below three balls and two strikes -> Take, regardless of rng', () => {
     const rng = makeRng(1)
-    for (const balls of [2, 3]) {
-      expect(opponentChoice('Likely strike', { balls, strikes: 0 }, EMPTY_BASES, 0, rng)).toBe('Power')
-      expect(opponentChoice('Likely strike', { balls, strikes: 1 }, EMPTY_BASES, 0, rng)).toBe('Power')
+    for (let balls = 0; balls <= 2; balls++) {
+      for (const strikes of [0, 1]) {
+        expect(opponentChoice('Likely ball', { balls, strikes }, EMPTY_BASES, 0, rng)).toBe('Take')
+      }
     }
   })
 
-  it('falls through to the Contact/Power split when balls < 2 and read is Coin flip or Likely strike', () => {
+  it('Likely strike with balls >= 2 (and strikes < 2) -> Power', () => {
     const rng = makeRng(1)
-    const choice1 = opponentChoice('Coin flip', { balls: 0, strikes: 0 }, EMPTY_BASES, 0, rng)
-    const choice2 = opponentChoice('Likely strike', { balls: 1, strikes: 1 }, EMPTY_BASES, 0, rng)
-    expect(['Contact', 'Power']).toContain(choice1)
-    expect(['Contact', 'Power']).toContain(choice2)
+    for (const strikes of [0, 1]) {
+      expect(opponentChoice('Likely strike', { balls: 2, strikes }, EMPTY_BASES, 0, rng)).toBe('Power')
+    }
   })
 
-  it('falls through to the split for Likely ball once strikes hits 2 is excluded, and for balls < 2 with Likely strike blocked by strikes>=2 handled above; explicit default-branch case: Likely ball with balls 0-1 is Take, so use Coin flip with low balls', () => {
+  it('Coin flip on the first pitch of a plate appearance -> Take (look at strike one)', () => {
     const rng = makeRng(1)
-    expect(['Contact', 'Power']).toContain(opponentChoice('Coin flip', { balls: 1, strikes: 0 }, EMPTY_BASES, 0, rng))
+    for (let balls = 0; balls <= 2; balls++) {
+      expect(opponentChoice('Coin flip', { balls, strikes: 0 }, EMPTY_BASES, 0, rng)).toBe('Take')
+    }
+  })
+
+  it('falls through to the Contact/Power split for Likely strike under two balls, and for Coin flip with one strike', () => {
+    const rng = makeRng(1)
+    for (const balls of [0, 1]) {
+      expect(['Contact', 'Power']).toContain(
+        opponentChoice('Likely strike', { balls, strikes: 0 }, EMPTY_BASES, 0, rng)
+      )
+      expect(['Contact', 'Power']).toContain(
+        opponentChoice('Likely strike', { balls, strikes: 1 }, EMPTY_BASES, 0, rng)
+      )
+    }
+    for (let balls = 0; balls <= 2; balls++) {
+      expect(['Contact', 'Power']).toContain(
+        opponentChoice('Coin flip', { balls, strikes: 1 }, EMPTY_BASES, 0, rng)
+      )
+    }
   })
 
   it('the fallback Contact/Power split holds at 0.6/0.4 within +-1% over 100k samples', () => {
@@ -56,7 +78,8 @@ describe('opponentChoice (GAME_DESIGN.md 5.4)', () => {
     const samples = 100_000
     let contactCount = 0
     for (let i = 0; i < samples; i++) {
-      const choice = opponentChoice('Coin flip', { balls: 0, strikes: 0 }, EMPTY_BASES, 0, rng)
+      // Coin flip with one strike and under three balls is a default-branch count.
+      const choice = opponentChoice('Coin flip', { balls: 0, strikes: 1 }, EMPTY_BASES, 0, rng)
       if (choice === 'Contact') contactCount++
       else expect(choice).toBe('Power')
     }

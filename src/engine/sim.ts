@@ -32,10 +32,17 @@ import {
  * The opponent's batting policy, exactly as GAME_DESIGN.md section 5.4
  * specifies it:
  *
- *   if read == Likely ball and strikes < 2:   Take
- *   elif strikes == 2:                         Contact
- *   elif balls >= 2 and read == Likely strike: Power
- *   else:                                      Contact (p 0.6) / Power (p 0.4)
+ *   if strikes == 2:            Take if read == Likely ball, else Contact
+ *   elif balls == 3:            Take                  # never swing 3-0 or 3-1
+ *   elif read == Likely ball:   Take
+ *   elif read == Likely strike: Power if balls >= 2, else Contact (p 0.6) / Power (p 0.4)
+ *   elif strikes == 0:          Take                  # first-pitch coin flip: look
+ *   else:                       Contact (p 0.6) / Power (p 0.4)
+ *
+ * The policy is count-aware on purpose. A policy that only takes on a
+ * `Likely ball` read can never walk, because section 3.2's count modifiers
+ * push the read toward `Likely strike` exactly as balls accumulate. This
+ * policy is fixed; section 7.2 lists it as not tunable.
  *
  * This policy deliberately never bunts (the doc frames it as "a
  * reasonable-but-beatable policy", and bunting well is exactly the kind of
@@ -45,14 +52,30 @@ import {
  * that way rather than adding bunt logic here.
  */
 export function opponentChoice(read: ReadBucket, count: Count, _bases: Bases, _outs: number, rng: Rng): Choice {
-  if (read === 'Likely ball' && count.strikes < 2) {
+  // GAME_DESIGN.md 5.4, in order:
+  //   if strikes == 2:            Take if read == Likely ball, else Contact
+  //   elif balls == 3:            Take
+  //   elif read == Likely ball:   Take
+  //   elif read == Likely strike: Power if balls >= 2, else Contact .6 / Power .4
+  //   elif strikes == 0:          Take
+  //   else:                       Contact .6 / Power .4
+  if (count.strikes === 2) {
+    return read === 'Likely ball' ? 'Take' : 'Contact'
+  }
+  if (count.balls === 3) {
     return 'Take'
   }
-  if (count.strikes === 2) {
-    return 'Contact'
+  if (read === 'Likely ball') {
+    return 'Take'
   }
-  if (count.balls >= 2 && read === 'Likely strike') {
-    return 'Power'
+  if (read === 'Likely strike') {
+    if (count.balls >= 2) {
+      return 'Power'
+    }
+    return rngBool(rng, OPPONENT_POLICY_CONTACT_PROBABILITY) ? 'Contact' : 'Power'
+  }
+  if (count.strikes === 0) {
+    return 'Take'
   }
   return rngBool(rng, OPPONENT_POLICY_CONTACT_PROBABILITY) ? 'Contact' : 'Power'
 }
