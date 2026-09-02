@@ -52,7 +52,7 @@ import { HomeScreen } from './HomeScreen'
 import { BetweenScreen } from './BetweenScreen'
 import { SeasonScreen } from './SeasonScreen'
 import { SettingsScreen, type DecodeOutcome } from './SettingsScreen'
-import { describeHalfInning, gameResultLine, halfInningLabel, ordinal, primaryAction, resumeSentence, surname } from './format'
+import { describeHalfInning, describePitch, gameResultLine, halfInningLabel, ordinal, primaryAction, resumeSentence, surname } from './format'
 
 const storage = getBrowserStorage() ?? createMemoryStorage()
 const TOTAL_GAMES = 20
@@ -117,6 +117,20 @@ export function App() {
   const [screen, setScreen] = useState<Screen>('home')
   const [between, setBetween] = useState<BetweenData | null>(null)
   const [yourPlays, setYourPlays] = useState<PlayLogEntry[]>([])
+  /**
+   * What the most recent pitch did, for the at-bat screen's pitch line.
+   * Cleared wherever the play log is, so a new half-inning or a resumed
+   * save does not open showing the previous half's last pitch.
+   */
+  const [lastPitch, setLastPitch] = useState<string | null>(null)
+  /**
+   * The play line for the pitch in `lastPitch`, or null when that pitch did
+   * not end the plate appearance. Deliberately NOT "the previous plate
+   * appearance's text": showing the last finished play under a fresh pitch
+   * line reads as though the two describe the same pitch -- a 3-2 ball
+   * sitting above "Okafor strikes out on a 2-2 pitch".
+   */
+  const [lastPlayText, setLastPlayText] = useState<string | null>(null)
   const [yourHits, setYourHits] = useState(0)
   const [pendingImport, setPendingImport] = useState<SaveEnvelope | null>(null)
   const [canUndo, setCanUndo] = useState(false)
@@ -160,6 +174,8 @@ export function App() {
     next = { ...next, currentGame: state }
     setYourPlays([])
     setYourHits(0)
+    setLastPitch(null)
+    setLastPlayText(null)
     persist(next)
 
     if (recap !== null && state.isOver === false && battingSideOf(state) === heronsSideOf(state) && recap.log.length > 0) {
@@ -190,8 +206,20 @@ export function App() {
     const batter = teamById(battingTeamId).batters[game.currentBatterIndex[battingSide]]
     const outsBefore = game.outs
 
+    const countBefore = game.count
     const rng = makeRng(game.rngState)
     const { state: afterPitch, result } = applyPitch(game, choice, teamsFor(game), rng)
+
+    setLastPlayText(result.play)
+    setLastPitch(
+      describePitch({
+        location: result.pitchResolution.location,
+        kind: result.pitchResolution.result.kind,
+        buntResult:
+          result.pitchResolution.result.kind === 'bunt' ? result.pitchResolution.result.batted : undefined,
+        countBefore
+      })
+    )
 
     const plays =
       result.play !== null
@@ -239,6 +267,8 @@ export function App() {
     persist(next)
     setYourPlays([])
     setYourHits(0)
+    setLastPitch(null)
+    setLastPlayText(null)
     setBetween({
       yours,
       opponent: opponentRecap,
@@ -317,6 +347,8 @@ export function App() {
           persist(fresh)
           setBetween(null)
           setYourPlays([])
+          setLastPitch(null)
+          setLastPlayText(null)
           setScreen('home')
         }}
         onBack={() => setScreen('home')}
@@ -417,7 +449,8 @@ export function App() {
         pitchLabel={`${game.count.balls + game.count.strikes} this at-bat`}
         recommended={recommendedChoice(game.currentPitch.displayedBucket)}
         buntAvailable={isBuntAvailable(game.bases, game.outs, game.count)}
-        lastPlay={yourPlays.length > 0 ? yourPlays[yourPlays.length - 1].text : null}
+        lastPitch={lastPitch}
+        lastPlay={lastPlayText}
         onChoose={onChoose}
       />
     )
