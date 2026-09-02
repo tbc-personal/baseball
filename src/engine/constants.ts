@@ -20,16 +20,16 @@ export const RATING_ADJ_DIVISOR = 100
 // ============================================================================
 
 /** Base in-zone probability before modifiers */
-export const BASE_ZONE_PROBABILITY = 0.55
+export const BASE_ZONE_PROBABILITY = 0.34
 
 /** Count modifiers for p_zone calculation: count -> adjustment */
 export const COUNT_MOD: Record<string, number> = {
-  '3-0': 0.2,
-  '2-0': 0.12,
-  '3-1': 0.12,
-  '1-0': 0.05,
-  '2-1': 0.05,
-  '3-2': 0.05,
+  '3-0': 0.0,
+  '2-0': 0.0,
+  '3-1': 0.0,
+  '1-0': 0.0,
+  '2-1': 0.0,
+  '3-2': 0.0,
   '0-0': 0,
   '1-1': 0,
   '0-1': -0.05,
@@ -58,7 +58,7 @@ export const TENDENCY_MOD_NEUTRAL = 0
 export const READ_BUCKET_LIKELY_STRIKE = 0.62
 
 /** Threshold for "Likely ball" bucket */
-export const READ_BUCKET_LIKELY_BALL = 0.45
+export const READ_BUCKET_LIKELY_BALL = 0.55
 
 /** Base accuracy of the read (before Eye adjustment) */
 export const READ_BASE_ACCURACY = 0.7
@@ -73,10 +73,10 @@ export const READ_BASE_ACCURACY = 0.7
  * Whiff probability is later multiplied by: 1 + adj(Stuff) - adj(Contact)
  */
 export const PITCH_OUTCOMES: Record<string, [number, number, number]> = {
-  'contact-zone': [0.7, 0.2, 0.1],
-  'contact-ball': [0.3, 0.35, 0.35],
-  'power-zone': [0.5, 0.25, 0.25],
-  'power-ball': [0.15, 0.3, 0.55]
+  'contact-zone': [0.36, 0.58, 0.06],
+  'contact-ball': [0.15, 0.76, 0.09],
+  'power-zone': [0.28, 0.59, 0.13],
+  'power-ball': [0.09, 0.71, 0.2]
 }
 
 // Note: Take choice is deterministic (called strike if zone, ball if ball)
@@ -91,10 +91,10 @@ export const PITCH_OUTCOMES: Record<string, [number, number, number]> = {
  * Rating shifts are applied before normalization.
  */
 export const BATTED_BALL_OUTCOMES: Record<string, [number, number, number, number, number]> = {
-  'contact-zone': [0.62, 0.27, 0.07, 0.01, 0.03],
-  'contact-ball': [0.75, 0.2, 0.04, 0.005, 0.005],
-  'power-zone': [0.58, 0.15, 0.12, 0.01, 0.14],
-  'power-ball': [0.74, 0.13, 0.07, 0.01, 0.05]
+  'contact-zone': [0.605, 0.256, 0.069, 0.01, 0.06],
+  'contact-ball': [0.742, 0.189, 0.045, 0.005, 0.019],
+  'power-zone': [0.505, 0.095, 0.115, 0.01, 0.275],
+  'power-ball': [0.705, 0.095, 0.075, 0.01, 0.115]
 }
 
 /**
@@ -131,13 +131,13 @@ export const BUNT_OUTCOMES: Record<string, number> = {
 // ============================================================================
 
 /** R2 scores on single with this probability (else to third) */
-export const BASE_RUNNING_R2_SCORES_ON_SINGLE = 0.65
+export const BASE_RUNNING_R2_SCORES_ON_SINGLE = 0.5
 
 /** R1 advances to third on single (if third is open) */
 export const BASE_RUNNING_R1_THIRD_ON_SINGLE = 0.3
 
 /** R1 scores on double with this probability (else to third) */
-export const BASE_RUNNING_R1_SCORES_ON_DOUBLE = 0.45
+export const BASE_RUNNING_R1_SCORES_ON_DOUBLE = 0.3
 
 /** Double play probability on groundout with runners on base */
 export const BASE_RUNNING_DOUBLE_PLAY = 0.12

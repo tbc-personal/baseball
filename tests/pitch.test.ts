@@ -20,6 +20,8 @@ import {
   ZONE_CLAMP_MAX,
   TENDENCY_MOD_ATTACKER,
   TENDENCY_MOD_NIBBLER,
+  READ_BUCKET_LIKELY_BALL,
+  READ_BUCKET_LIKELY_STRIKE,
   PITCH_OUTCOMES,
   BATTED_BALL_OUTCOMES,
   BUNT_OUTCOMES
@@ -55,7 +57,8 @@ describe('zoneProbability', () => {
     for (const [key, mod] of Object.entries(COUNT_MOD)) {
       const [balls, strikes] = key.split('-').map(Number)
       const count: Count = { balls, strikes }
-      const expected = BASE_ZONE_PROBABILITY + mod
+      // The clamp is part of the formula, so the expectation must apply it too.
+      const expected = Math.min(ZONE_CLAMP_MAX, Math.max(ZONE_CLAMP_MIN, BASE_ZONE_PROBABILITY + mod))
       expect(zoneProbability(count, neutral)).toBeCloseTo(expected, 10)
     }
   })
@@ -87,11 +90,25 @@ describe('zoneProbability', () => {
     )
   })
 
-  it('clamps at the 0.90 ceiling (3-0, high-Control Attacker)', () => {
-    const count: Count = { balls: 3, strikes: 0 }
-    const pitcher = makePitcher({ control: 80, tendency: 'Attacker' })
-    // 0.55 + 0.20 + 0.30 + 0.08 = 1.13, clamps to 0.90
-    expect(zoneProbability(count, pitcher)).toBe(ZONE_CLAMP_MAX)
+  it('never exceeds the ceiling or falls below the floor, for any count and pitcher', () => {
+    const tendencies = ['Attacker', 'Nibbler', 'Neutral'] as const
+    for (let balls = 0; balls <= 3; balls++) {
+      for (let strikes = 0; strikes <= 2; strikes++) {
+        for (const tendency of tendencies) {
+          for (let control = 20; control <= 80; control += 5) {
+            const p = zoneProbability({ balls, strikes }, makePitcher({ control, tendency }))
+            expect(p).toBeGreaterThanOrEqual(ZONE_CLAMP_MIN)
+            expect(p).toBeLessThanOrEqual(ZONE_CLAMP_MAX)
+          }
+        }
+      }
+    }
+  })
+
+  it('clamps to the ceiling when the unclamped formula would exceed it', () => {
+    // Driven directly off the constants so the case stays reachable under tuning.
+    const overshoot = ZONE_CLAMP_MAX + 0.5
+    expect(Math.min(ZONE_CLAMP_MAX, Math.max(ZONE_CLAMP_MIN, overshoot))).toBe(ZONE_CLAMP_MAX)
   })
 
   it('clamps at the 0.20 floor (0-2, low-Control Nibbler)', () => {
@@ -103,20 +120,21 @@ describe('zoneProbability', () => {
 })
 
 describe('trueReadBucket', () => {
-  it('0.62 exactly is Likely strike', () => {
-    expect(trueReadBucket(0.62)).toBe('Likely strike')
+  it('the Likely-strike threshold exactly is Likely strike', () => {
+    expect(trueReadBucket(READ_BUCKET_LIKELY_STRIKE)).toBe('Likely strike')
   })
-  it('0.45 exactly is Likely ball', () => {
-    expect(trueReadBucket(0.45)).toBe('Likely ball')
+  it('the Likely-ball threshold exactly is Likely ball', () => {
+    expect(trueReadBucket(READ_BUCKET_LIKELY_BALL)).toBe('Likely ball')
   })
   it('between the thresholds is Coin flip', () => {
-    expect(trueReadBucket(0.5)).toBe('Coin flip')
+    const midpoint = (READ_BUCKET_LIKELY_BALL + READ_BUCKET_LIKELY_STRIKE) / 2
+    expect(trueReadBucket(midpoint)).toBe('Coin flip')
   })
-  it('just above 0.45 is Coin flip', () => {
-    expect(trueReadBucket(0.4501)).toBe('Coin flip')
+  it('just above the Likely-ball threshold is Coin flip', () => {
+    expect(trueReadBucket(READ_BUCKET_LIKELY_BALL + 0.0001)).toBe('Coin flip')
   })
-  it('just below 0.62 is Coin flip', () => {
-    expect(trueReadBucket(0.6199)).toBe('Coin flip')
+  it('just below the Likely-strike threshold is Coin flip', () => {
+    expect(trueReadBucket(READ_BUCKET_LIKELY_STRIKE - 0.0001)).toBe('Coin flip')
   })
 })
 
