@@ -40,6 +40,10 @@ export interface BetweenScreenProps {
    * Empty for the ordinary between-innings break.
    */
   milestones: readonly string[]
+  /**
+   * "Herons win 5-4" when the game just ended, null between innings.
+   */
+  resultLine: string | null
   nextLabel: string
   savedNote: string
   onNext: () => void
@@ -121,6 +125,24 @@ export function BetweenScreen(props: BetweenScreenProps) {
           )}
         </div>
       </div>
+
+      {props.resultLine !== null && (
+        <div
+          style={{
+            fontFamily: 'var(--sc-font-display)',
+            fontSize: '26px',
+            fontWeight: 600,
+            textTransform: 'uppercase',
+            letterSpacing: '0.03em',
+            color: 'var(--sc-pencil-red)',
+            borderBottom: '2px solid var(--sc-ink)',
+            paddingBottom: '10px',
+            marginTop: '-8px'
+          }}
+        >
+          {props.resultLine}
+        </div>
+      )}
 
       {milestone !== null && (
         <div

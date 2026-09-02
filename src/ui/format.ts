@@ -311,3 +311,25 @@ export function milestoneLine(fired: readonly string[]): string | null {
   }
   return fired.map((id) => labels[id] ?? id).join(' · ')
 }
+
+/**
+ * The result line shown when a game is over: "Herons win 5–4", winner
+ * first. Every team's short name is a plural bird ("Herons", "Wrens"), so
+ * "win" is right for all of them and no singular case is needed.
+ *
+ * Returns null for a tied score, which the engine never produces for a
+ * finished game (§4 keeps playing while the score is level) — the guard is
+ * here so a caller cannot render "Herons win 4–4".
+ */
+export function gameResultLine(opts: {
+  homeShort: string
+  awayShort: string
+  homeScore: number
+  awayScore: number
+}): string | null {
+  if (opts.homeScore === opts.awayScore) return null
+  const winner = opts.homeScore > opts.awayScore ? opts.homeShort : opts.awayShort
+  const high = Math.max(opts.homeScore, opts.awayScore)
+  const low = Math.min(opts.homeScore, opts.awayScore)
+  return `${winner} win ${high}–${low}`
+}

@@ -12,7 +12,8 @@ import {
   relativeTime,
   previewSummary,
   describeHalfInning,
-  milestoneLine
+  milestoneLine,
+  gameResultLine
 } from '../src/ui/format'
 import { sortBatting, type BattingRow } from '../src/ui/SeasonScreen'
 import type { BatterStats } from '../src/engine/types'
@@ -220,5 +221,28 @@ describe('milestoneLine', () => {
 
   it('falls back to the raw id rather than dropping an unknown milestone', () => {
     expect(milestoneLine(['not-a-milestone'])).toBe('not-a-milestone')
+  })
+})
+
+describe('gameResultLine', () => {
+  it('names the winner first, higher score first, however the sides fall', () => {
+    expect(gameResultLine({ homeShort: 'Herons', awayShort: 'Wrens', homeScore: 5, awayScore: 4 })).toBe('Herons win 5–4')
+    expect(gameResultLine({ homeShort: 'Wrens', awayShort: 'Herons', homeScore: 4, awayScore: 5 })).toBe('Herons win 5–4')
+  })
+
+  it('reports a loss as the opponent winning, not as a negative Herons line', () => {
+    expect(gameResultLine({ homeShort: 'Herons', awayShort: 'Ospreys', homeScore: 2, awayScore: 7 })).toBe('Ospreys win 7–2')
+  })
+
+  it('handles a shutout', () => {
+    expect(gameResultLine({ homeShort: 'Herons', awayShort: 'Loons', homeScore: 3, awayScore: 0 })).toBe('Herons win 3–0')
+  })
+
+  it('returns null on a level score, which a finished game never has', () => {
+    expect(gameResultLine({ homeShort: 'Herons', awayShort: 'Wrens', homeScore: 4, awayScore: 4 })).toBeNull()
+  })
+
+  it('uses an en dash, matching the scoreboard elsewhere', () => {
+    expect(gameResultLine({ homeShort: 'Herons', awayShort: 'Wrens', homeScore: 5, awayScore: 4 })).toContain('–')
   })
 })

@@ -52,7 +52,7 @@ import { HomeScreen } from './HomeScreen'
 import { BetweenScreen } from './BetweenScreen'
 import { SeasonScreen } from './SeasonScreen'
 import { SettingsScreen, type DecodeOutcome } from './SettingsScreen'
-import { describeHalfInning, halfInningLabel, ordinal, primaryAction, resumeSentence, surname } from './format'
+import { describeHalfInning, gameResultLine, halfInningLabel, ordinal, primaryAction, resumeSentence, surname } from './format'
 
 const storage = getBrowserStorage() ?? createMemoryStorage()
 const TOTAL_GAMES = 20
@@ -331,6 +331,16 @@ export function App() {
     return (
       <BetweenScreen
         milestones={b.milestones}
+        resultLine={
+          b.gameEnded && b.finalGame !== null
+            ? gameResultLine({
+                homeShort: teamById(b.finalGame.homeTeamId).shortName,
+                awayShort: teamById(b.finalGame.awayTeamId).shortName,
+                homeScore: b.finalGame.homeScore,
+                awayScore: b.finalGame.awayScore
+              })
+            : null
+        }
         yoursPlayed={b.yours.log.length > 0}
         halfLabel={halfInningLabel(b.yours.half, b.yours.inning)}
         runs={b.yours.runs}
