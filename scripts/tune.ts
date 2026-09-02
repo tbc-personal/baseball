@@ -4,8 +4,10 @@
  * Plays N games with the section 5.4 opponent policy on both sides,
  * cycling through every pairing of the seven league teams (see
  * tune-lib.ts's matchupFor) so the measurement is league-wide rather than
- * one matchup, and reports every §7 stat against its target band. Also
- * runs the "always Contact" policy check described at the end of §7.
+ * one matchup, and reports every §7 stat against its target band. Then
+ * runs the §7.1 policy matrix: each of the five guard policies head-to-head
+ * against the sim policy, plus each policy's own walk rate and pitches per
+ * plate appearance from a mirror batch (that policy on both sides).
  *
  * Run with `npm run tune` (default 10,000 games) or `npm run tune -- 2000`
  * to override the game count, and `npm run tune -- 2000 12345` to also
@@ -19,7 +21,8 @@
  * measurement.
  */
 
-import { buildRows, directionNote, fmtRuns, rowPasses, runBatch, runContactCheck } from './tune-lib'
+import { buildRows, directionNote, fmtPct, fmtRuns, rowPasses, runBatch, runPolicyMatrix } from './tune-lib'
+import type { MatrixRow } from './tune-lib'
 
 // ============================================================================
 // CLI args
@@ -60,6 +63,40 @@ function printTable(rows: ReturnType<typeof buildRows>): boolean {
   return allPass
 }
 
+/** "<= 60%" for a row whose floor is 0, "60-110%" otherwise. */
+function bandLabel(row: MatrixRow): string {
+  return row.min <= 0 ? `<=${fmtPct(row.max)}` : `${fmtPct(row.min)}-${fmtPct(row.max)}`
+}
+
+function printMatrix(matrix: MatrixRow[]): boolean {
+  const labelWidth = Math.max(...matrix.map((r) => r.label.length)) + 2
+  console.log(
+    pad('Policy', labelWidth) +
+      padLeft('Runs vs sim', 13) +
+      padLeft('Band', 14) +
+      padLeft('Walk%', 9) +
+      padLeft('P/PA', 7) +
+      '  Result'
+  )
+  console.log('-'.repeat(labelWidth + 13 + 14 + 9 + 7 + 10))
+  let allPass = true
+  for (const row of matrix) {
+    if (!row.pass) allPass = false
+    console.log(
+      pad(row.label, labelWidth) +
+        padLeft(fmtPct(row.ratio), 13) +
+        padLeft(bandLabel(row), 14) +
+        padLeft(fmtPct(row.mirrorWalkRate), 9) +
+        padLeft(fmtRuns(row.mirrorPitchesPerPa), 7) +
+        `  ${row.pass ? 'PASS' : 'FAIL'}`
+    )
+  }
+  console.log('')
+  console.log('Walk% and P/PA are from a mirror batch (the policy on both sides), not the head-to-head:')
+  console.log('they are how a degenerate optimum shows itself -- a policy that walks most of the time.')
+  return allPass
+}
+
 // ============================================================================
 // Main
 // ============================================================================
@@ -79,37 +116,28 @@ function main(): void {
   )
 
   // --------------------------------------------------------------------
-  // Always-Contact check
+  // Section 7.1 policy matrix
   // --------------------------------------------------------------------
-  console.log('\n=== Always-Contact policy check ===\n')
+  console.log('\n=== Section 7.1 policy matrix (each policy vs the sim policy) ===\n')
 
-  const contactTally = runContactCheck(GAMES, BASE_SEED + 1, 'always-Contact check')
+  const matrix = runPolicyMatrix(GAMES, BASE_SEED + 1, true)
+  const matrixPass = printMatrix(matrix)
 
-  const simRate = contactTally.simRuns / contactTally.simTeamGames
-  const contactRate = contactTally.contactRuns / contactTally.contactTeamGames
-  const ratio = contactRate / simRate
-  const withinTenPct = ratio >= 0.9 && ratio <= 1.1
-
-  console.log(`Sim-policy side:      ${fmtRuns(simRate)} runs/team-game (${contactTally.simTeamGames} team-games)`)
-  console.log(`Always-Contact side:  ${fmtRuns(contactRate)} runs/team-game (${contactTally.contactTeamGames} team-games)`)
-  console.log(`Ratio (Contact / sim): ${(ratio * 100).toFixed(1)}%  ${withinTenPct ? 'PASS' : 'FAIL'}`)
-  if (!withinTenPct) {
-    console.log(
-      ratio > 1.1
-        ? '  Always-Contact dominates: Power needs more upside or Contact needs more outs.'
-        : '  Always-Contact gets crushed: Contact needs more upside relative to Power.'
-    )
-  }
+  console.log(
+    `\n(each row: ${GAMES} head-to-head games, the guard policy alternating home and away per game,\n` +
+      ` plus ${GAMES} mirror games of the policy against itself for the walk / pitches-per-PA columns)`
+  )
 
   // --------------------------------------------------------------------
   // Overall verdict
   // --------------------------------------------------------------------
-  const overallPass = mainPass && withinTenPct
+  const overallPass = mainPass && matrixPass
   console.log(`\n=== Overall: ${overallPass ? 'PASS' : 'FAIL'} ===`)
   if (!overallPass) {
     const failing = rows.filter((r) => !rowPasses(r)).map((r) => r.label)
-    if (failing.length > 0) console.log(`Out of band: ${failing.join(', ')}`)
-    if (!withinTenPct) console.log('Always-Contact check out of band.')
+    if (failing.length > 0) console.log(`Bands out of range: ${failing.join(', ')}`)
+    const failingRows = matrix.filter((r) => !r.pass).map((r) => r.label)
+    if (failingRows.length > 0) console.log(`Matrix rows out of range: ${failingRows.join(', ')}`)
   }
 }
 

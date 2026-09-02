@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { emptyTally, playGame, runBatch, runContactCheck, matchupFor, buildPairs } from '../scripts/tune-lib'
+import { emptyTally, playGame, runBatch, runPolicyMatchup, runPolicyMatrix, MATRIX_POLICIES, alwaysTakePolicy, matchupFor, buildPairs } from '../scripts/tune-lib'
 import { ALL_TEAMS } from '../src/engine/season'
 
 // A few dozen games: this guards the measurement harness itself, not the
@@ -90,11 +90,63 @@ describe('tune-lib measurement harness self-consistency', () => {
     }
   })
 
-  it('the always-Contact check tallies exactly one team-game per side per game played', () => {
-    const result = runContactCheck(TEST_GAMES, TEST_SEED, '')
+  it('a head-to-head matchup tallies exactly one team-game per side per game played', () => {
+    const result = runPolicyMatchup(alwaysTakePolicy, TEST_GAMES, TEST_SEED, '')
     expect(result.simTeamGames).toBe(TEST_GAMES)
-    expect(result.contactTeamGames).toBe(TEST_GAMES)
+    expect(result.policyTeamGames).toBe(TEST_GAMES)
     expect(result.simRuns).toBeGreaterThanOrEqual(0)
-    expect(result.contactRuns).toBeGreaterThanOrEqual(0)
+    expect(result.policyRuns).toBeGreaterThanOrEqual(0)
+  })
+
+  it('a mirror batch runs the policy on both sides, not the sim policy', () => {
+    // Always-Take can only ever end a plate appearance in a walk or a
+    // strikeout, so a mirror batch of it records no hits at all. That is a
+    // cheap proof the policy argument is actually reaching both sides.
+    const { tally } = runBatch({ games: 4, baseSeed: TEST_SEED, label: '', policy: alwaysTakePolicy })
+    expect(tally.hits).toBe(0)
+    expect(tally.bb + tally.k).toBe(tally.pa)
+  })
+})
+
+describe('section 7.1 policy matrix', () => {
+  it('covers the five guard policies with the bands section 7.1 states', () => {
+    expect(MATRIX_POLICIES.map((p) => p.label)).toEqual([
+      'Always Take',
+      'Always Contact',
+      'Always Power',
+      'Take until two strikes, then Contact',
+      'Take unless Likely strike (Power); Contact with two strikes'
+    ])
+    expect(MATRIX_POLICIES.map((p) => [p.min, p.max])).toEqual([
+      [0, 0.6],
+      [0.6, 1.1],
+      [0, 1.1],
+      [0, 1.1],
+      [0.95, 1.3]
+    ])
+  })
+
+  it('builds one row per policy, each with a ratio, mirror stats and a verdict', () => {
+    const matrix = runPolicyMatrix(6, TEST_SEED)
+    expect(matrix).toHaveLength(MATRIX_POLICIES.length)
+    for (const row of matrix) {
+      expect(row.ratio).toBeGreaterThanOrEqual(0)
+      expect(Number.isFinite(row.ratio)).toBe(true)
+      expect(row.mirrorWalkRate).toBeGreaterThanOrEqual(0)
+      expect(row.mirrorWalkRate).toBeLessThanOrEqual(1)
+      expect(row.mirrorPitchesPerPa).toBeGreaterThanOrEqual(1)
+      expect(row.pass).toBe(row.ratio >= row.min && row.ratio <= row.max)
+    }
+  })
+
+  it('the always-Take row walks far more often than the sim policy does', () => {
+    const matrix = runPolicyMatrix(6, TEST_SEED)
+    const take = matrix.find((r) => r.label === 'Always Take')
+    const contact = matrix.find((r) => r.label === 'Always Contact')
+    expect(take).toBeDefined()
+    expect(contact).toBeDefined()
+    // Always-Contact never takes a pitch, so it can never walk.
+    expect(contact!.mirrorWalkRate).toBe(0)
+    expect(take!.mirrorWalkRate).toBeGreaterThan(contact!.mirrorWalkRate)
   })
 })

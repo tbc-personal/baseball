@@ -1,7 +1,7 @@
 /**
  * Reusable harness for the Monte Carlo tuning measurement (GAME_DESIGN.md
  * section 7): playing sim-policy-vs-sim-policy games while tallying every
- * pitch/PA/half-inning league-wide, plus the always-Contact policy check.
+ * pitch/PA/half-inning league-wide, plus the section 7.1 policy matrix.
  *
  * Split out from scripts/tune.ts (the CLI entry point) so tests/tune.test.ts
  * can import the harness directly, at a small game count, without running
@@ -26,7 +26,44 @@ import { MAX_SEED_VALUE, MAX_PITCHES_PER_GAME } from '../src/engine/constants'
 export type Policy = (read: ReadBucket, count: Count, bases: Bases, outs: number, rng: Rng) => Choice
 
 export const simPolicy: Policy = opponentChoice
+
+export const alwaysTakePolicy: Policy = () => 'Take'
 export const alwaysContactPolicy: Policy = () => 'Contact'
+export const alwaysPowerPolicy: Policy = () => 'Power'
+
+/** Take until two strikes, then Contact -- the obvious "patient" exploit. */
+export const patientContactPolicy: Policy = (_read, count) => (count.strikes >= 2 ? 'Contact' : 'Take')
+
+/**
+ * Take unless the read is `Likely strike` (then Power); Contact with two
+ * strikes. This is the intended thoughtful play, and section 7.1 asks that
+ * it beat the sim policy modestly rather than by a landslide.
+ */
+export const readingPolicy: Policy = (read, count) => {
+  if (count.strikes >= 2) return 'Contact'
+  return read === 'Likely strike' ? 'Power' : 'Take'
+}
+
+/**
+ * The five section 7.1 guard policies with their required runs-vs-sim
+ * bands, in the order the table lists them. `min`/`max` are fractions of
+ * the sim policy's runs per team-game; a row passes inside [min, max].
+ */
+export interface MatrixPolicy {
+  label: string
+  policy: Policy
+  min: number
+  max: number
+  why: string
+}
+
+export const MATRIX_POLICIES: MatrixPolicy[] = [
+  { label: 'Always Take', policy: alwaysTakePolicy, min: 0, max: 0.6, why: 'Walking must not be free' },
+  { label: 'Always Contact', policy: alwaysContactPolicy, min: 0.6, max: 1.1, why: 'One button must not dominate or be useless' },
+  { label: 'Always Power', policy: alwaysPowerPolicy, min: 0, max: 1.1, why: 'Same' },
+  { label: 'Take until two strikes, then Contact', policy: patientContactPolicy, min: 0, max: 1.1, why: 'The obvious "patient" exploit' },
+  { label: 'Take unless Likely strike (Power); Contact with two strikes', policy: readingPolicy, min: 0.95, max: 1.3, why: 'The intended thoughtful play should win, modestly' }
+]
 
 // ============================================================================
 // League-wide tally of every pitch/PA/half-inning played
@@ -175,17 +212,25 @@ export interface RunOptions {
   baseSeed: number
   /** Progress line prefix written to stderr; pass '' to silence progress lines entirely. */
   label: string
+  /**
+   * The policy played by both sides. Defaults to the section 5.4 sim
+   * policy, which is what the section 7 band table measures. The policy
+   * matrix passes each guard policy here to get its own walk rate and
+   * pitches per plate appearance from a mirror batch.
+   */
+  policy?: Policy
 }
 
 export function runBatch(opts: RunOptions): { tally: Tally } {
   const seedRng = makeRng(opts.baseSeed)
   const tally = emptyTally()
   const progressEvery = Math.max(1, Math.floor(opts.games / 20))
+  const policy = opts.policy ?? simPolicy
 
   for (let g = 0; g < opts.games; g++) {
     const { home, away } = matchupFor(g)
     const gameSeed = drawSeed(seedRng)
-    playGame(home, away, g, gameSeed, { home: simPolicy, away: simPolicy }, tally)
+    playGame(home, away, g, gameSeed, { home: policy, away: policy }, tally)
 
     if (opts.label && ((g + 1) % progressEvery === 0 || g + 1 === opts.games)) {
       process.stderr.write(`[tune] ${opts.label}: ${g + 1}/${opts.games} games\n`)
@@ -196,56 +241,104 @@ export function runBatch(opts: RunOptions): { tally: Tally } {
 }
 
 // ============================================================================
-// Always-Contact policy check
+// Section 7.1 policy matrix: each guard policy head-to-head against the
+// section 5.4 sim policy
 // ============================================================================
 
-export interface ContactCheckResult {
+export interface MatchupResult {
   simRuns: number
-  contactRuns: number
+  policyRuns: number
   simTeamGames: number
-  contactTeamGames: number
+  policyTeamGames: number
 }
 
 /**
- * Runs the always-Contact vs sim-policy batch: one side always chooses
- * Contact, the other plays the sim policy. Which physical side (home/away)
- * plays always-Contact alternates with the pairing cycle (matchupFor's
- * cycleFlip), same as home/away itself, so the comparison isn't confounded
- * with one team or one home/away slot.
+ * Play `games` games with one side on `policy` and the other on the sim
+ * policy, alternating which physical side (home/away) plays the guard
+ * policy on every game, so the comparison is not confounded with the
+ * home/away slot or with one team.
  */
-export function runContactCheck(games: number, baseSeed: number, label = ''): ContactCheckResult {
+export function runPolicyMatchup(policy: Policy, games: number, baseSeed: number, label = ''): MatchupResult {
   const seedRng = makeRng(baseSeed)
   let simRuns = 0
-  let contactRuns = 0
-  let simTeamGames = 0
-  let contactTeamGames = 0
+  let policyRuns = 0
   const progressEvery = Math.max(1, Math.floor(games / 20))
-  const scratchTally = emptyTally() // per-pitch tally not needed for this check, but playGame requires one
+  const scratchTally = emptyTally() // per-pitch tally not needed here, but playGame requires one
 
   for (let g = 0; g < games; g++) {
-    const { home, away, cycleFlip } = matchupFor(g)
+    const { home, away } = matchupFor(g)
     const gameSeed = drawSeed(seedRng)
-    const homePlaysContact = !cycleFlip
-    const policies = homePlaysContact ? { home: alwaysContactPolicy, away: simPolicy } : { home: simPolicy, away: alwaysContactPolicy }
+    const homePlaysPolicy = g % 2 === 0
+    const policies = homePlaysPolicy ? { home: policy, away: simPolicy } : { home: simPolicy, away: policy }
 
     const state = playGame(home, away, g, gameSeed, policies, scratchTally)
 
-    if (homePlaysContact) {
-      contactRuns += state.homeScore
+    if (homePlaysPolicy) {
+      policyRuns += state.homeScore
       simRuns += state.awayScore
     } else {
       simRuns += state.homeScore
-      contactRuns += state.awayScore
+      policyRuns += state.awayScore
     }
-    contactTeamGames += 1
-    simTeamGames += 1
 
     if (label && ((g + 1) % progressEvery === 0 || g + 1 === games)) {
       process.stderr.write(`[tune] ${label}: ${g + 1}/${games} games\n`)
     }
   }
 
-  return { simRuns, contactRuns, simTeamGames, contactTeamGames }
+  return { simRuns, policyRuns, simTeamGames: games, policyTeamGames: games }
+}
+
+export interface MatrixRow {
+  label: string
+  min: number
+  max: number
+  why: string
+  /** The policy's runs per team-game as a fraction of the sim policy's. */
+  ratio: number
+  simRate: number
+  policyRate: number
+  /** From the mirror batch (policy on both sides): how a degenerate optimum shows itself. */
+  mirrorWalkRate: number
+  mirrorPitchesPerPa: number
+  pass: boolean
+}
+
+/**
+ * Build the full section 7.1 matrix. For each guard policy this runs two
+ * batches: a head-to-head against the sim policy (the PASS/FAIL band), and
+ * a mirror batch of the policy against itself, whose walk rate and pitches
+ * per plate appearance are how a reviewer sees a degenerate optimum -- a
+ * policy that walks two times in three is visible in the mirror numbers
+ * even before its run ratio is read.
+ */
+export function runPolicyMatrix(games: number, baseSeed: number, verbose = false): MatrixRow[] {
+  return MATRIX_POLICIES.map((entry, i) => {
+    const head = runPolicyMatchup(entry.policy, games, baseSeed + i * 2, verbose ? `matrix: ${entry.label}` : '')
+    const mirror = runBatch({
+      games,
+      baseSeed: baseSeed + i * 2 + 1,
+      label: verbose ? `mirror: ${entry.label}` : '',
+      policy: entry.policy
+    })
+
+    const simRate = head.simRuns / head.simTeamGames
+    const policyRate = head.policyRuns / head.policyTeamGames
+    const ratio = simRate > 0 ? policyRate / simRate : Number.POSITIVE_INFINITY
+
+    return {
+      label: entry.label,
+      min: entry.min,
+      max: entry.max,
+      why: entry.why,
+      ratio,
+      simRate,
+      policyRate,
+      mirrorWalkRate: mirror.tally.bb / mirror.tally.pa,
+      mirrorPitchesPerPa: mirror.tally.pitches / mirror.tally.pa,
+      pass: ratio >= entry.min && ratio <= entry.max
+    }
+  })
 }
 
 // ============================================================================
