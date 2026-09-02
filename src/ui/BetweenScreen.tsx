@@ -32,6 +32,8 @@ export interface BetweenScreenProps {
     homeRuns: number
     awayHits: number
     homeHits: number
+    awayStrikeouts: number
+    homeStrikeouts: number
     ownSide: 'home' | 'away'
     currentInningIndex: number
   }
@@ -54,13 +56,14 @@ const INNING_COLUMNS = 9
 
 export function BetweenScreen(props: BetweenScreenProps) {
   const ls = props.lineScore
-  const gridTemplate = `62px repeat(${INNING_COLUMNS}, minmax(0, 1fr)) 30px 30px`
+  const gridTemplate = `62px repeat(${INNING_COLUMNS}, minmax(0, 1fr)) 26px 26px 26px`
 
   const row = (
     label: string,
     innings: number[],
     runs: number,
     hits: number,
+    strikeouts: number,
     own: boolean,
     lastRow: boolean
   ) => (
@@ -103,6 +106,7 @@ export function BetweenScreen(props: BetweenScreenProps) {
       })}
       <span style={{ fontWeight: 700 }}>{runs}</span>
       <span>{hits}</span>
+      <span>{strikeouts}</span>
     </div>
   )
 
@@ -229,9 +233,10 @@ export function BetweenScreen(props: BetweenScreenProps) {
           ))}
           <span style={{ fontWeight: 700, color: 'var(--sc-ink)' }}>R</span>
           <span style={{ fontWeight: 700, color: 'var(--sc-ink)' }}>H</span>
+          <span style={{ fontWeight: 700, color: 'var(--sc-ink)' }}>K</span>
         </div>
-        {row(ls.awayShort, ls.away, ls.awayRuns, ls.awayHits, ls.ownSide === 'away', false)}
-        {row(ls.homeShort, ls.home, ls.homeRuns, ls.homeHits, ls.ownSide === 'home', true)}
+        {row(ls.awayShort, ls.away, ls.awayRuns, ls.awayHits, ls.awayStrikeouts, ls.ownSide === 'away', false)}
+        {row(ls.homeShort, ls.home, ls.homeRuns, ls.homeHits, ls.homeStrikeouts, ls.ownSide === 'home', true)}
       </div>
 
       <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>

@@ -15,7 +15,7 @@
 import { useState } from 'preact/hooks'
 import type { Choice, GameState } from '../engine/types'
 import type { Teams } from '../engine/inning'
-import { applyPitch, createGame } from '../engine/inning'
+import { applyPitch, createGame, strikeoutsOf } from '../engine/inning'
 import type { HalfInningRecap, PlayLogEntry } from '../engine/sim'
 import { simulateHalfInningWithRecap, isHitEvent } from '../engine/sim'
 import { makeRng } from '../engine/rng'
@@ -520,6 +520,8 @@ function buildLineScore(game: GameState | null, fallback: HalfInningRecap) {
     homeRuns: game?.homeScore ?? 0,
     awayHits: game?.hits.away ?? 0,
     homeHits: game?.hits.home ?? 0,
+    awayStrikeouts: game === null ? 0 : strikeoutsOf(game).away,
+    homeStrikeouts: game === null ? 0 : strikeoutsOf(game).home,
     ownSide,
     currentInningIndex: Math.min((game?.inning ?? 1) - 1, INNINGS_PER_GAME - 1)
   }

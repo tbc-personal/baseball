@@ -246,3 +246,21 @@ describe('gameResultLine', () => {
     expect(gameResultLine({ homeShort: 'Herons', awayShort: 'Wrens', homeScore: 5, awayScore: 4 })).toContain('–')
   })
 })
+
+describe('sortBatting by strikeouts', () => {
+  const row = (label: string, k: number): BattingRow => ({
+    batterId: label,
+    label,
+    stats: { batterId: label, pa: 10, ab: 10, h: 3, doubles: 0, triples: 0, hr: 0, bb: 0, k, r: 0, rbi: 0 }
+  })
+
+  it('puts the most strikeouts first, matching the other counting columns', () => {
+    const sorted = sortBatting([row('a', 2), row('b', 9), row('c', 5)], 'k')
+    expect(sorted.map((r) => r.label)).toEqual(['b', 'c', 'a'])
+  })
+
+  it('breaks ties by name, as the other keys do', () => {
+    const sorted = sortBatting([row('z', 4), row('a', 4)], 'k')
+    expect(sorted.map((r) => r.label)).toEqual(['a', 'z'])
+  })
+})
