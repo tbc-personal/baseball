@@ -52,7 +52,17 @@ import { HomeScreen } from './HomeScreen'
 import { BetweenScreen } from './BetweenScreen'
 import { SeasonScreen } from './SeasonScreen'
 import { SettingsScreen, type DecodeOutcome } from './SettingsScreen'
-import { describeHalfInning, describePitch, gameResultLine, halfInningLabel, ordinal, primaryAction, resumeSentence, surname } from './format'
+import {
+  describeHalfInning,
+  describePitch,
+  gameResultLine,
+  halfInningLabel,
+  ordinal,
+  primaryAction,
+  resumeSentence,
+  surname,
+  withSeasonHitCount
+} from './format'
 
 const storage = getBrowserStorage() ?? createMemoryStorage()
 const TOTAL_GAMES = 20
@@ -210,7 +220,18 @@ export function App() {
     const rng = makeRng(game.rngState)
     const { state: afterPitch, result } = applyPitch(game, choice, teamsFor(game), rng)
 
-    setLastPlayText(result.play)
+    let season = accumulateStats(appState.season, battingTeamId, batter.id, result)
+
+    // Season stats are already updated above, so the batter's line for this
+    // hit type includes the at-bat that just happened -- "singles (3)." is
+    // his 3rd single of the season, this one included.
+    const seasonStats = season.batterStats.find((s) => s.batterId === batter.id)
+    const playText =
+      result.play !== null && result.event !== null && seasonStats !== undefined
+        ? withSeasonHitCount(result.play, batter.name, result.event, seasonStats)
+        : result.play
+
+    setLastPlayText(playText)
     setLastPitch(
       describePitch({
         location: result.pitchResolution.location,
@@ -222,14 +243,13 @@ export function App() {
     )
 
     const plays =
-      result.play !== null
-        ? [...yourPlays, { text: result.play, outsAfter: outsBefore + result.outsAdded, runsScored: result.runsScored.length }]
+      playText !== null
+        ? [...yourPlays, { text: playText, outsAfter: outsBefore + result.outsAdded, runsScored: result.runsScored.length }]
         : yourPlays
     setYourPlays(plays)
     const hits = yourHits + (isHitEvent(result.event) ? 1 : 0)
     setYourHits(hits)
 
-    let season = accumulateStats(appState.season, battingTeamId, batter.id, result)
     let nextGame = afterPitch
 
     if (!result.halfInningEnded && !result.gameEnded) {

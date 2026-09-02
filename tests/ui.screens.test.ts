@@ -14,7 +14,8 @@ import {
   describeHalfInning,
   milestoneLine,
   gameResultLine,
-  describePitch
+  describePitch,
+  withSeasonHitCount
 } from '../src/ui/format'
 import { sortBatting, type BattingRow } from '../src/ui/SeasonScreen'
 import type { BatterStats } from '../src/engine/types'
@@ -323,5 +324,65 @@ describe('sortBatting by strikeouts', () => {
   it('breaks ties by name, as the other keys do', () => {
     const sorted = sortBatting([row('z', 4), row('a', 4)], 'k')
     expect(sorted.map((r) => r.label)).toEqual(['a', 'z'])
+  })
+})
+
+describe('withSeasonHitCount', () => {
+  const stats = (over: Partial<BatterStats>): BatterStats => ({
+    batterId: 'b1',
+    pa: 0,
+    ab: 0,
+    h: 0,
+    doubles: 0,
+    triples: 0,
+    hr: 0,
+    bb: 0,
+    k: 0,
+    r: 0,
+    rbi: 0,
+    ...over
+  })
+
+  it('inserts the singles tally right after the verb', () => {
+    // h - doubles - triples - hr = 4 - 1 - 0 - 1 = 2
+    const s = stats({ h: 4, doubles: 1, hr: 1 })
+    expect(withSeasonHitCount('Dee Okafor singles.', 'Dee Okafor', 'single', s)).toBe('Dee Okafor singles (2).')
+  })
+
+  it('inserts the doubles tally', () => {
+    const s = stats({ h: 2, doubles: 2 })
+    expect(withSeasonHitCount('Dee Okafor doubles.', 'Dee Okafor', 'double', s)).toBe('Dee Okafor doubles (2).')
+  })
+
+  it('inserts the triples tally', () => {
+    const s = stats({ h: 1, triples: 1 })
+    expect(withSeasonHitCount('Dee Okafor triples.', 'Dee Okafor', 'triple', s)).toBe('Dee Okafor triples (1).')
+  })
+
+  it('inserts the home run tally before the exclamation point', () => {
+    const s = stats({ h: 5, hr: 5 })
+    expect(withSeasonHitCount('Dee Okafor homers!', 'Dee Okafor', 'hr', s)).toBe('Dee Okafor homers (5)!')
+  })
+
+  it('keeps a scoring suffix after the inserted count', () => {
+    const s = stats({ h: 1, hr: 1 })
+    expect(withSeasonHitCount('Dee Okafor homers! Ruth Halvorsen scores.', 'Dee Okafor', 'hr', s)).toBe(
+      'Dee Okafor homers (1)! Ruth Halvorsen scores.'
+    )
+  })
+
+  it('leaves non-hit events unchanged', () => {
+    const s = stats({ bb: 1 })
+    expect(withSeasonHitCount('Dee Okafor walks.', 'Dee Okafor', 'walk', s)).toBe('Dee Okafor walks.')
+    expect(withSeasonHitCount('Dee Okafor strikes out on a 3-2 pitch.', 'Dee Okafor', 'strikeout', s)).toBe(
+      'Dee Okafor strikes out on a 3-2 pitch.'
+    )
+  })
+
+  it('leaves a bunt single unchanged -- its wording does not match the "singles" verb', () => {
+    const s = stats({ h: 1 })
+    expect(withSeasonHitCount('Dee Okafor bunts for a single.', 'Dee Okafor', 'bunt-single', s)).toBe(
+      'Dee Okafor bunts for a single.'
+    )
   })
 })
