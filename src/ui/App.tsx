@@ -389,7 +389,7 @@ export function App() {
                 leftOnBase: b.opponent.leftOnBase,
                 plays: b.opponent.log.length
               })
-            : 'No opponent half to play.'
+            : null
         }
         lineScore={buildLineScore(lineScoreGame, shown)}
         nextLabel={b.gameEnded ? 'Next game' : `Play the ${ordinal(nextInningOf(lineScoreGame, b))}`}
