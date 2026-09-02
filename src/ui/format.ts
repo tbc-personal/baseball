@@ -7,7 +7,8 @@
  */
 
 import type { Bases, Batter, BatterStats, Count, HalfInning } from '../engine/types'
-import { battingAverage } from '../engine/season'
+import type { PlateAppearanceEvent } from '../engine/inning'
+import { battingAverage, singlesOf } from '../engine/season'
 import { BALLS_FOR_WALK, STRIKES_FOR_STRIKEOUT, OUTS_PER_HALF_INNING } from '../engine/constants'
 
 // ============================================================================
@@ -332,4 +333,37 @@ export function gameResultLine(opts: {
   const high = Math.max(opts.homeScore, opts.awayScore)
   const low = Math.min(opts.homeScore, opts.awayScore)
   return `${winner} win ${high}–${low}`
+}
+
+const HIT_VERBS: Partial<Record<PlateAppearanceEvent, string>> = {
+  single: 'singles',
+  double: 'doubles',
+  triple: 'triples',
+  hr: 'homers'
+}
+
+/**
+ * Inserts the batter's season tally for this hit type right after the verb
+ * in the play line: "Dee Okafor singles." -> "Dee Okafor singles (3).".
+ * `stats` must already include this plate appearance -- the count shown is
+ * "how many of these has he hit this season", including the one just now.
+ *
+ * A no-op for anything but a single/double/triple/homer (a walk, an out, a
+ * bunt single -- those don't get a season count inline), and for a play
+ * line that doesn't start with "batterName verb" for some other reason
+ * (defensive; shouldn't happen given describePlay's fixed wording).
+ */
+export function withSeasonHitCount(
+  play: string,
+  batterName: string,
+  event: PlateAppearanceEvent,
+  stats: BatterStats
+): string {
+  const verb = HIT_VERBS[event]
+  if (verb === undefined) return play
+
+  const count = event === 'single' ? singlesOf(stats) : event === 'double' ? stats.doubles : event === 'triple' ? stats.triples : stats.hr
+  const prefix = `${batterName} ${verb}`
+  if (!play.startsWith(prefix)) return play
+  return `${prefix} (${count})${play.slice(prefix.length)}`
 }

@@ -7,6 +7,7 @@ import {
   battingAverage,
   onBasePercentage,
   sluggingPercentage,
+  singlesOf,
   standingsTable,
   recordGameResult,
   checkMilestones,
@@ -232,6 +233,17 @@ describe('battingAverage / onBasePercentage / sluggingPercentage', () => {
     expect(onBasePercentage(stats)).toBeCloseTo(5 / 12, 10)
     // singles = 3 - 1 - 0 - 1 = 1; total bases = 1*1 + 1*2 + 0*3 + 1*4 = 7; SLG = 7/10
     expect(sluggingPercentage(stats)).toBeCloseTo(0.7, 10)
+  })
+})
+
+describe('singlesOf', () => {
+  it('is hits minus doubles, triples, and homers', () => {
+    const stats: BatterStats = { batterId: 'b1', pa: 12, ab: 10, h: 3, doubles: 1, triples: 0, hr: 1, bb: 2, k: 2, r: 2, rbi: 4 }
+    expect(singlesOf(stats)).toBe(1)
+  })
+
+  it('is 0 for a batter with no hits at all', () => {
+    expect(singlesOf(zeroStats('b1'))).toBe(0)
   })
 })
 

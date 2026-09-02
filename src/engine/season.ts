@@ -278,11 +278,18 @@ export function onBasePercentage(stats: BatterStats): number {
   return denominator === 0 ? 0 : (stats.h + stats.bb) / denominator
 }
 
+/** Singles aren't tracked directly -- a hit that isn't a double, triple, or homer. */
+export function singlesOf(stats: BatterStats): number {
+  return stats.h - stats.doubles - stats.triples - stats.hr
+}
+
 export function sluggingPercentage(stats: BatterStats): number {
   if (stats.ab === 0) return 0
-  const singles = stats.h - stats.doubles - stats.triples - stats.hr
   const totalBases =
-    singles * SLG_SINGLE_WEIGHT + stats.doubles * SLG_DOUBLE_WEIGHT + stats.triples * SLG_TRIPLE_WEIGHT + stats.hr * SLG_HR_WEIGHT
+    singlesOf(stats) * SLG_SINGLE_WEIGHT +
+    stats.doubles * SLG_DOUBLE_WEIGHT +
+    stats.triples * SLG_TRIPLE_WEIGHT +
+    stats.hr * SLG_HR_WEIGHT
   return totalBases / stats.ab
 }
 
