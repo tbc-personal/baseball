@@ -27,7 +27,12 @@ export interface HomeScreenProps {
   action: PrimaryAction
   standings: StandingsRow[]
   ownTeamId: string
-  upNext: string | null
+  /**
+   * The next scheduled game, or null while one is in progress. `headline`
+   * carries the matchup and the opponent's record; `pitcher` is the
+   * scouting line on who you will face.
+   */
+  upNext: { headline: string; pitcher: string } | null
   onPrimary: () => void
   onSeason: () => void
   onSettings: () => void
@@ -159,7 +164,8 @@ export function HomeScreen(props: HomeScreenProps) {
       {props.upNext !== null && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           <div style={LABEL}>Up next</div>
-          <div style={{ fontSize: '14px' }}>{props.upNext}</div>
+          <div style={{ fontSize: '14px' }}>{props.upNext.headline}</div>
+          <div style={{ fontSize: '13px', color: 'var(--sc-muted-ink)' }}>{props.upNext.pitcher}</div>
         </div>
       )}
 

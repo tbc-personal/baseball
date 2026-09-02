@@ -52,7 +52,7 @@ import { HomeScreen } from './HomeScreen'
 import { BetweenScreen } from './BetweenScreen'
 import { SeasonScreen } from './SeasonScreen'
 import { SettingsScreen, type DecodeOutcome } from './SettingsScreen'
-import { describeHalfInning, gameResultLine, halfInningLabel, ordinal, primaryAction, resumeSentence, surname } from './format'
+import { describeHalfInning, gameResultLine, halfInningLabel, ordinal, pitcherPreview, primaryAction, resumeSentence, surname, upNextHeadline } from './format'
 
 const storage = getBrowserStorage() ?? createMemoryStorage()
 const TOTAL_GAMES = 20
@@ -477,9 +477,27 @@ export function App() {
       ownTeamId={HERONS_TEAM_ID}
       upNext={
         nextScheduled && (game === null || game.isOver)
-          ? `Game ${nextScheduled.gameIndex + 1} ${nextScheduled.homeTeamId === HERONS_TEAM_ID ? 'vs' : 'at'} ${
-              teamById(nextScheduled.homeTeamId === HERONS_TEAM_ID ? nextScheduled.awayTeamId : nextScheduled.homeTeamId).name
-            }`
+          ? (() => {
+              const isHome = nextScheduled.homeTeamId === HERONS_TEAM_ID
+              const opponent = teamById(isHome ? nextScheduled.awayTeamId : nextScheduled.homeTeamId)
+              const record = standings.find((r) => r.teamId === opponent.id)
+              const starter = pitcherForGame(opponent, nextScheduled.gameIndex)
+              return {
+                headline: upNextHeadline({
+                  gameNumber: nextScheduled.gameIndex + 1,
+                  isHome,
+                  opponentName: opponent.name,
+                  opponentWins: record?.wins ?? 0,
+                  opponentLosses: record?.losses ?? 0
+                }),
+                pitcher: pitcherPreview({
+                  name: starter.name,
+                  control: starter.control,
+                  stuff: starter.stuff,
+                  tendency: starter.tendency
+                })
+              }
+            })()
           : null
       }
       onPrimary={beginPlaying}

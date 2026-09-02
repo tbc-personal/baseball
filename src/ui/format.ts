@@ -6,7 +6,7 @@
  * tested directly without @testing-library/preact (tests/ui.at-bat.test.tsx).
  */
 
-import type { Bases, Batter, BatterStats, Count, HalfInning } from '../engine/types'
+import type { Bases, Batter, BatterStats, Count, HalfInning, Tendency } from '../engine/types'
 import { battingAverage } from '../engine/season'
 import { BALLS_FOR_WALK, STRIKES_FOR_STRIKEOUT, OUTS_PER_HALF_INNING } from '../engine/constants'
 
@@ -332,4 +332,36 @@ export function gameResultLine(opts: {
   const high = Math.max(opts.homeScore, opts.awayScore)
   const low = Math.min(opts.homeScore, opts.awayScore)
   return `${winner} win ${high}–${low}`
+}
+
+/**
+ * The "Up next" headline: which game, home or away, against whom, and how
+ * that opponent has been going. "Game 3 at Ashford Wrens · 2–1".
+ *
+ * The record is the opponent's, not yours -- the point of the line is to
+ * tell you what you are walking into.
+ */
+export function upNextHeadline(opts: {
+  gameNumber: number
+  isHome: boolean
+  opponentName: string
+  opponentWins: number
+  opponentLosses: number
+}): string {
+  const where = opts.isHome ? 'vs' : 'at'
+  return `Game ${opts.gameNumber} ${where} ${opts.opponentName} · ${opts.opponentWins}–${opts.opponentLosses}`
+}
+
+/**
+ * The scouting line on the pitcher you are about to face, in the same
+ * shorthand the batter card uses for its ratings.
+ * "Grady Thornton · CTL 55 · STF 45 · Attacker".
+ */
+export function pitcherPreview(opts: {
+  name: string
+  control: number
+  stuff: number
+  tendency: Tendency
+}): string {
+  return `${opts.name} · CTL ${opts.control} · STF ${opts.stuff} · ${opts.tendency}`
 }
