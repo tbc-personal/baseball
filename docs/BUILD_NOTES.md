@@ -291,16 +291,44 @@ policy 110.6%), and seed 777 reproduces every verdict.
   `npm run tune` at 10,000 games on two seeds before being trusted; matrix
   rows move five or six points between 1,000-game runs, and two candidates
   were adopted and then withdrawn this round on exactly that mistake.
-- **The challenge term is untested against the UI.** The read shown on the
-  at-bat screen now varies by batter, which is the point, but nobody has
-  played a half-inning by hand to check it reads sensibly rather than just
-  measuring correctly.
-- **Milestone rendering is tested as a pure function, not as DOM.** Same gap
-  round 1 recorded: `@testing-library/preact` is still not a dependency, so
-  `milestoneLine` is unit-tested and the band itself is unrendered in tests.
+- **Milestone rendering is still not covered by an automated DOM test.**
+  `@testing-library/preact` is not a dependency, so `milestoneLine` is
+  unit-tested and the band is checked only by the manual playthrough below.
 - Everything in round 1's "Known gaps" that was not about tuning still
   applies: no device testing, no Lighthouse run, unverified Pages deploy,
   Google Fonts never seen in this sandbox.
+
+## 7. Alpha verification (0.1)
+
+Before tagging 0.1 the built app was driven in headless Chromium at a
+390x844 viewport — the first time anyone had played it rather than tested
+it. What was checked, and what it found:
+
+- **A full nine-inning game, plus a ten-inning one**, choosing by the read
+  (Power on `Likely strike`, Take on `Likely ball`, Contact on `Coin flip`).
+  119 and 148 clicks respectively, no uncaught errors, no console errors
+  beyond the blocked Google Fonts request.
+- **Two real bugs, both fixed** in the commit before the tag: the
+  between-innings screen drew a blank box score at the end of every game,
+  and the standings tiebreak sorted on a name the standings table does not
+  print. Neither was reachable by the existing tests, because both are in
+  the seam between `App.tsx` state and a screen's props — exactly the gap
+  round 1 named when it said the UI tests cover extracted logic and not
+  rendering.
+- **The milestone band renders**, verified visually ("First home run of the
+  season") — the R5 item, now confirmed in the real app rather than only as
+  a pure function.
+- **The challenge term reads sensibly on the at-bat screen.** The read
+  varies by batter as intended.
+- **Persistence survives a reload** mid-at-bat: the home screen came back
+  with "Top of the 1st. Nobody on, two outs, Achterberg up. You left it at
+  a 0-1 count."
+- **The save code round-trips**: 993 bytes, `SS1-` prefix, copied to the
+  clipboard from the settings screen.
+
+Still unverified, and unverifiable here: real iOS/Android hardware,
+home-screen install, the Pages deployment itself, and the app rendered in
+Oswald and Courier Prime rather than the fallback stacks.
 
 ## 6. How to run
 
