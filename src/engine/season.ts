@@ -302,6 +302,18 @@ export interface StandingsRow extends TeamRecord {
 }
 
 /**
+ * The short name for a team the player renamed. The built-in teams carry
+ * both a full name and a short one ("Harbor Herons" / "Herons"), but the
+ * Settings field is a single string, so the short form is the last word --
+ * the same shape as every name in section 5.2. A one-word name is used
+ * whole.
+ */
+export function shortenTeamName(name: string): string {
+  const words = name.trim().split(/\s+/)
+  return words.length > 1 ? words[words.length - 1] : name.trim()
+}
+
+/**
  * Standings rows sorted by win pct (ties broken by run differential, then
  * alphabetically by team name -- §5.3/§6 don't specify a tiebreaker), with
  * games back, run differential, and the L5 display string computed so the
@@ -319,9 +331,17 @@ export interface StandingsRow extends TeamRecord {
  * list is ordered by bird name rather than by the string it displays;
  * the two names cannot both sort alphabetically at once.
  */
-export function standingsTable(season: SeasonState): StandingsRow[] {
+export function standingsTable(season: SeasonState, ownTeamName?: string): StandingsRow[] {
   const lookup = teamLookup()
-  const nameOf = (id: TeamId): string => lookup[id]?.shortName ?? lookup[id]?.name ?? id
+  const displayName = (id: TeamId): string =>
+    id === HERONS_TEAM_ID && ownTeamName !== undefined && ownTeamName.trim() !== ''
+      ? ownTeamName.trim()
+      : (lookup[id]?.name ?? id)
+  const displayShortName = (id: TeamId): string =>
+    id === HERONS_TEAM_ID && ownTeamName !== undefined && ownTeamName.trim() !== ''
+      ? shortenTeamName(ownTeamName.trim())
+      : (lookup[id]?.shortName ?? id)
+  const nameOf = (id: TeamId): string => displayShortName(id)
   const sorted = [...season.standings].sort((a, b) => {
     const pctDiff = winPct(b) - winPct(a)
     if (pctDiff !== 0) return pctDiff
@@ -333,8 +353,8 @@ export function standingsTable(season: SeasonState): StandingsRow[] {
 
   return sorted.map((record) => ({
     ...record,
-    teamName: lookup[record.teamId]?.name ?? record.teamId,
-    teamShortName: lookup[record.teamId]?.shortName ?? record.teamId,
+    teamName: displayName(record.teamId),
+    teamShortName: displayShortName(record.teamId),
     winPct: winPct(record),
     gamesBack: leader ? (leader.wins - record.wins + (record.losses - leader.losses)) / GAMES_BACK_DIVISOR : 0,
     runDifferential: record.runsFor - record.runsAgainst,
