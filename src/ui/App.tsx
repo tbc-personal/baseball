@@ -15,7 +15,7 @@
 import { useState } from 'preact/hooks'
 import type { Choice, GameState } from '../engine/types'
 import type { Teams } from '../engine/inning'
-import { applyPitch, createGame } from '../engine/inning'
+import { applyPitch, createGame, strikeoutsOf, pitchCountsOf } from '../engine/inning'
 import type { HalfInningRecap, PlayLogEntry } from '../engine/sim'
 import { simulateHalfInningWithRecap, isHitEvent } from '../engine/sim'
 import { makeRng } from '../engine/rng'
@@ -27,6 +27,7 @@ import {
   accumulateStats,
   teamById,
   standingsTable,
+  teamDisplayNames,
   recordGameResult,
   checkMilestones
 } from '../engine/season'
@@ -52,7 +53,20 @@ import { HomeScreen } from './HomeScreen'
 import { BetweenScreen } from './BetweenScreen'
 import { SeasonScreen } from './SeasonScreen'
 import { SettingsScreen, type DecodeOutcome } from './SettingsScreen'
-import { describeHalfInning, gameResultLine, halfInningLabel, ordinal, primaryAction, resumeSentence, surname } from './format'
+import {
+  describeHalfInning,
+  describePitch,
+  gameResultLine,
+  halfInningLabel,
+  ordinal,
+  pitchCountLabel,
+  pitcherPreview,
+  primaryAction,
+  resumeSentence,
+  surname,
+  upNextHeadline,
+  withSeasonHitCount
+} from './format'
 
 const storage = getBrowserStorage() ?? createMemoryStorage()
 const TOTAL_GAMES = 20
@@ -117,6 +131,20 @@ export function App() {
   const [screen, setScreen] = useState<Screen>('home')
   const [between, setBetween] = useState<BetweenData | null>(null)
   const [yourPlays, setYourPlays] = useState<PlayLogEntry[]>([])
+  /**
+   * What the most recent pitch did, for the at-bat screen's pitch line.
+   * Cleared wherever the play log is, so a new half-inning or a resumed
+   * save does not open showing the previous half's last pitch.
+   */
+  const [lastPitch, setLastPitch] = useState<string | null>(null)
+  /**
+   * The play line for the pitch in `lastPitch`, or null when that pitch did
+   * not end the plate appearance. Deliberately NOT "the previous plate
+   * appearance's text": showing the last finished play under a fresh pitch
+   * line reads as though the two describe the same pitch -- a 3-2 ball
+   * sitting above "Okafor strikes out on a 2-2 pitch".
+   */
+  const [lastPlayText, setLastPlayText] = useState<string | null>(null)
   const [yourHits, setYourHits] = useState(0)
   const [pendingImport, setPendingImport] = useState<SaveEnvelope | null>(null)
   const [canUndo, setCanUndo] = useState(false)
@@ -160,6 +188,8 @@ export function App() {
     next = { ...next, currentGame: state }
     setYourPlays([])
     setYourHits(0)
+    setLastPitch(null)
+    setLastPlayText(null)
     persist(next)
 
     if (recap !== null && state.isOver === false && battingSideOf(state) === heronsSideOf(state) && recap.log.length > 0) {
@@ -190,18 +220,40 @@ export function App() {
     const batter = teamById(battingTeamId).batters[game.currentBatterIndex[battingSide]]
     const outsBefore = game.outs
 
+    const countBefore = game.count
     const rng = makeRng(game.rngState)
     const { state: afterPitch, result } = applyPitch(game, choice, teamsFor(game), rng)
 
+    let season = accumulateStats(appState.season, battingTeamId, batter.id, result)
+
+    // Season stats are already updated above, so the batter's line for this
+    // hit type includes the at-bat that just happened -- "singles (3)." is
+    // his 3rd single of the season, this one included.
+    const seasonStats = season.batterStats.find((s) => s.batterId === batter.id)
+    const playText =
+      result.play !== null && result.event !== null && seasonStats !== undefined
+        ? withSeasonHitCount(result.play, batter.name, result.event, seasonStats)
+        : result.play
+
+    setLastPlayText(playText)
+    setLastPitch(
+      describePitch({
+        location: result.pitchResolution.location,
+        kind: result.pitchResolution.result.kind,
+        buntResult:
+          result.pitchResolution.result.kind === 'bunt' ? result.pitchResolution.result.batted : undefined,
+        countBefore
+      })
+    )
+
     const plays =
-      result.play !== null
-        ? [...yourPlays, { text: result.play, outsAfter: outsBefore + result.outsAdded, runsScored: result.runsScored.length }]
+      playText !== null
+        ? [...yourPlays, { text: playText, outsAfter: outsBefore + result.outsAdded, runsScored: result.runsScored.length }]
         : yourPlays
     setYourPlays(plays)
     const hits = yourHits + (isHitEvent(result.event) ? 1 : 0)
     setYourHits(hits)
 
-    let season = accumulateStats(appState.season, battingTeamId, batter.id, result)
     let nextGame = afterPitch
 
     if (!result.halfInningEnded && !result.gameEnded) {
@@ -239,6 +291,8 @@ export function App() {
     persist(next)
     setYourPlays([])
     setYourHits(0)
+    setLastPitch(null)
+    setLastPlayText(null)
     setBetween({
       yours,
       opponent: opponentRecap,
@@ -258,7 +312,7 @@ export function App() {
     return (
       <SeasonScreen
         gamesPlayed={gamesPlayed}
-        standings={standingsTable(appState.season)}
+        standings={standingsTable(appState.season, appState.teamName)}
         ownTeamId={HERONS_TEAM_ID}
         batting={appState.season.batterStats.map((s) => {
           const b = teamById(HERONS_TEAM_ID).batters.find((x) => x.id === s.batterId)
@@ -317,6 +371,8 @@ export function App() {
           persist(fresh)
           setBetween(null)
           setYourPlays([])
+          setLastPitch(null)
+          setLastPlayText(null)
           setScreen('home')
         }}
         onBack={() => setScreen('home')}
@@ -334,8 +390,8 @@ export function App() {
         resultLine={
           b.gameEnded && b.finalGame !== null
             ? gameResultLine({
-                homeShort: teamById(b.finalGame.homeTeamId).shortName,
-                awayShort: teamById(b.finalGame.awayTeamId).shortName,
+                homeShort: teamDisplayNames(b.finalGame.homeTeamId, appState.teamName).shortName,
+                awayShort: teamDisplayNames(b.finalGame.awayTeamId, appState.teamName).shortName,
                 homeScore: b.finalGame.homeScore,
                 awayScore: b.finalGame.awayScore
               })
@@ -357,9 +413,9 @@ export function App() {
                 leftOnBase: b.opponent.leftOnBase,
                 plays: b.opponent.log.length
               })
-            : 'No opponent half to play.'
+            : null
         }
-        lineScore={buildLineScore(lineScoreGame, shown)}
+        lineScore={buildLineScore(lineScoreGame, shown, appState.teamName)}
         nextLabel={b.gameEnded ? 'Next game' : `Play the ${ordinal(nextInningOf(lineScoreGame, b))}`}
         savedNote={savedNote(lineScoreGame, b)}
         onNext={() => {
@@ -398,7 +454,7 @@ export function App() {
 
     return (
       <AtBatScreen
-        ownTeamName={ownTeam.shortName}
+        ownTeamName={teamDisplayNames(ownTeam.id, appState.teamName).shortName}
         ownScore={ownSide === 'home' ? game.homeScore : game.awayScore}
         opponentName={opponentTeam.shortName}
         opponentScore={ownSide === 'home' ? game.awayScore : game.homeScore}
@@ -414,17 +470,18 @@ export function App() {
         pitcherName={pitcher.name}
         bucket={game.currentPitch.displayedBucket}
         tendency={pitcher.tendency}
-        pitchLabel={`${game.count.balls + game.count.strikes} this at-bat`}
+        pitchLabel={pitchCountLabel(pitchCountsOf(game)[pitchingSide], pitchCountsOf(game).thisAtBat)}
         recommended={recommendedChoice(game.currentPitch.displayedBucket)}
         buntAvailable={isBuntAvailable(game.bases, game.outs, game.count)}
-        lastPlay={yourPlays.length > 0 ? yourPlays[yourPlays.length - 1].text : null}
+        lastPitch={lastPitch}
+        lastPlay={lastPlayText}
         onChoose={onChoose}
       />
     )
   }
 
   // Home
-  const standings = standingsTable(appState.season)
+  const standings = standingsTable(appState.season, appState.teamName)
   const gamesPlayed = appState.season.schedule.filter((g) => g.played).length
   const ownRecord = standings.find((r) => r.teamId === HERONS_TEAM_ID)
   const nextScheduled = appState.season.schedule.find((g) => !g.played)
@@ -441,7 +498,7 @@ export function App() {
           return {
             homeOrAway: ownSide === 'home' ? 'home' : 'away',
             opponentName: (ownSide === 'home' ? teams.away : teams.home).name,
-            ownTeamShort: teams[ownSide].shortName,
+            ownTeamShort: teamDisplayNames(teams[ownSide].id, appState.teamName).shortName,
             ownScore: ownSide === 'home' ? game.homeScore : game.awayScore,
             opponentShort: (ownSide === 'home' ? teams.away : teams.home).shortName,
             opponentScore: ownSide === 'home' ? game.awayScore : game.homeScore,
@@ -477,9 +534,27 @@ export function App() {
       ownTeamId={HERONS_TEAM_ID}
       upNext={
         nextScheduled && (game === null || game.isOver)
-          ? `Game ${nextScheduled.gameIndex + 1} ${nextScheduled.homeTeamId === HERONS_TEAM_ID ? 'vs' : 'at'} ${
-              teamById(nextScheduled.homeTeamId === HERONS_TEAM_ID ? nextScheduled.awayTeamId : nextScheduled.homeTeamId).name
-            }`
+          ? (() => {
+              const isHome = nextScheduled.homeTeamId === HERONS_TEAM_ID
+              const opponent = teamById(isHome ? nextScheduled.awayTeamId : nextScheduled.homeTeamId)
+              const record = standings.find((r) => r.teamId === opponent.id)
+              const starter = pitcherForGame(opponent, nextScheduled.gameIndex)
+              return {
+                headline: upNextHeadline({
+                  gameNumber: nextScheduled.gameIndex + 1,
+                  isHome,
+                  opponentName: opponent.name,
+                  opponentWins: record?.wins ?? 0,
+                  opponentLosses: record?.losses ?? 0
+                }),
+                pitcher: pitcherPreview({
+                  name: starter.name,
+                  control: starter.control,
+                  stuff: starter.stuff,
+                  tendency: starter.tendency
+                })
+              }
+            })()
           : null
       }
       onPrimary={beginPlaying}
@@ -506,20 +581,22 @@ function savedNote(game: GameState | null, b: BetweenData): string {
   return `Saved. ${game.homeScore}–${game.awayScore}.`
 }
 
-function buildLineScore(game: GameState | null, fallback: HalfInningRecap) {
+function buildLineScore(game: GameState | null, fallback: HalfInningRecap, ownTeamName?: string) {
   const ls = game?.lineScore ?? { home: [], away: [] }
   const homeId = game?.homeTeamId ?? HERONS_TEAM_ID
   const awayId = game?.awayTeamId ?? fallback.battingTeamId
   const ownSide = homeId === HERONS_TEAM_ID ? ('home' as const) : ('away' as const)
   return {
-    awayShort: teamById(awayId).shortName,
-    homeShort: teamById(homeId).shortName,
+    awayShort: teamDisplayNames(awayId, ownTeamName).shortName,
+    homeShort: teamDisplayNames(homeId, ownTeamName).shortName,
     away: ls.away,
     home: ls.home,
     awayRuns: game?.awayScore ?? 0,
     homeRuns: game?.homeScore ?? 0,
     awayHits: game?.hits.away ?? 0,
     homeHits: game?.hits.home ?? 0,
+    awayStrikeouts: game === null ? 0 : strikeoutsOf(game).away,
+    homeStrikeouts: game === null ? 0 : strikeoutsOf(game).home,
     ownSide,
     currentInningIndex: Math.min((game?.inning ?? 1) - 1, INNINGS_PER_GAME - 1)
   }

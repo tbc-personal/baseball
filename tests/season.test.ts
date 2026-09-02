@@ -7,7 +7,10 @@ import {
   battingAverage,
   onBasePercentage,
   sluggingPercentage,
+  singlesOf,
   standingsTable,
+  shortenTeamName,
+  teamDisplayNames,
   recordGameResult,
   checkMilestones,
   simulateSeason,
@@ -235,6 +238,17 @@ describe('battingAverage / onBasePercentage / sluggingPercentage', () => {
   })
 })
 
+describe('singlesOf', () => {
+  it('is hits minus doubles, triples, and homers', () => {
+    const stats: BatterStats = { batterId: 'b1', pa: 12, ab: 10, h: 3, doubles: 1, triples: 0, hr: 1, bb: 2, k: 2, r: 2, rbi: 4 }
+    expect(singlesOf(stats)).toBe(1)
+  })
+
+  it('is 0 for a batter with no hits at all', () => {
+    expect(singlesOf(zeroStats('b1'))).toBe(0)
+  })
+})
+
 describe('standingsTable', () => {
   it('sorts by win pct, computes games back / run differential / last-five display, handles 0 games', () => {
     const season = createSeason(1)
@@ -252,6 +266,33 @@ describe('standingsTable', () => {
     const season = createSeason(1)
     const names = standingsTable(season).map((r) => r.teamShortName)
     expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)))
+  })
+
+  it('shows the renamed team in the standings, full and short', () => {
+    const season = createSeason(1)
+    const table = standingsTable(season, 'Portland Pickles')
+    const own = table.find((r) => r.teamId === 'herons')
+    expect(own?.teamName).toBe('Portland Pickles')
+    expect(own?.teamShortName).toBe('Pickles')
+    // The other six are untouched.
+    expect(table.filter((r) => r.teamId !== 'herons').map((r) => r.teamName)).toContain('Ashford Wrens')
+  })
+
+  it('falls back to the built-in name when no override is given or it is blank', () => {
+    const season = createSeason(1)
+    for (const override of [undefined, '', '   ']) {
+      const own = standingsTable(season, override).find((r) => r.teamId === 'herons')
+      expect(own?.teamName).toBe('Harbor Herons')
+      expect(own?.teamShortName).toBe('Herons')
+    }
+  })
+
+  it('re-sorts on the renamed team, so a rename moves the row', () => {
+    const season = createSeason(1)
+    const ids = (name?: string) => standingsTable(season, name).map((r) => r.teamId)
+    // "Herons" sorts third of seven; "Albatrosses" sorts first.
+    expect(ids()[2]).toBe('herons')
+    expect(ids('Anchorage Albatrosses')[0]).toBe('herons')
   })
 
   it('the alphabetical tiebreak is only a tiebreak: a win still outranks it', () => {
@@ -452,5 +493,54 @@ describe('simulateSeason: a full 20-game season runs headless and is internally 
   it('a different seed produces a different season', () => {
     const other = simulateSeason(2027)
     expect(other).not.toEqual(season)
+  })
+})
+
+describe('shortenTeamName', () => {
+  it('takes the last word, matching how the built-in names are shaped', () => {
+    expect(shortenTeamName('Portland Pickles')).toBe('Pickles')
+    expect(shortenTeamName('Marrow Creek Cranes')).toBe('Cranes')
+  })
+
+  it('uses a one-word name whole', () => {
+    expect(shortenTeamName('Herons')).toBe('Herons')
+  })
+
+  it('tolerates stray whitespace', () => {
+    expect(shortenTeamName('  Harbor   Herons  ')).toBe('Herons')
+  })
+})
+
+describe('teamDisplayNames', () => {
+  it('renames only the player\'s own team', () => {
+    expect(teamDisplayNames('herons', 'Portland Pickles')).toEqual({
+      name: 'Portland Pickles',
+      shortName: 'Pickles'
+    })
+    expect(teamDisplayNames('wrens', 'Portland Pickles')).toEqual({
+      name: 'Ashford Wrens',
+      shortName: 'Wrens'
+    })
+  })
+
+  it('falls back to the built-in names for undefined, empty or blank overrides', () => {
+    for (const override of [undefined, '', '   ']) {
+      expect(teamDisplayNames('herons', override)).toEqual({ name: 'Harbor Herons', shortName: 'Herons' })
+    }
+  })
+
+  it('trims a padded name rather than showing the padding', () => {
+    expect(teamDisplayNames('herons', '  Portland Pickles  ')).toEqual({
+      name: 'Portland Pickles',
+      shortName: 'Pickles'
+    })
+  })
+
+  it('is the same rule standingsTable uses, so screens cannot disagree', () => {
+    const season = createSeason(1)
+    const row = standingsTable(season, 'Portland Pickles').find((r) => r.teamId === 'herons')
+    const direct = teamDisplayNames('herons', 'Portland Pickles')
+    expect(row?.teamName).toBe(direct.name)
+    expect(row?.teamShortName).toBe(direct.shortName)
   })
 })

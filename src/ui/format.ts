@@ -6,8 +6,9 @@
  * tested directly without @testing-library/preact (tests/ui.at-bat.test.tsx).
  */
 
-import type { Bases, Batter, BatterStats, Count, HalfInning } from '../engine/types'
-import { battingAverage } from '../engine/season'
+import type { Bases, Batter, BatterStats, Count, HalfInning, PitchLocation, Tendency } from '../engine/types'
+import type { PlateAppearanceEvent } from '../engine/inning'
+import { battingAverage, singlesOf } from '../engine/season'
 import { BALLS_FOR_WALK, STRIKES_FOR_STRIKEOUT, OUTS_PER_HALF_INNING } from '../engine/constants'
 
 // ============================================================================
@@ -332,4 +333,137 @@ export function gameResultLine(opts: {
   const high = Math.max(opts.homeScore, opts.awayScore)
   const low = Math.min(opts.homeScore, opts.awayScore)
   return `${winner} win ${high}–${low}`
+}
+
+/**
+ * What just happened on this pitch, for the at-bat screen: whether the
+ * pitch was in the zone, what the batter did about it, and where that
+ * leaves the count. "Taken in the zone. Strike 2."
+ *
+ * Returns null when the pitch put the ball in play or produced a bunt that
+ * is not a foul -- the play line already describes those, and repeating
+ * "In play" above "Dee Okafor singles." says nothing.
+ *
+ * The count is derived from the count BEFORE the pitch rather than read
+ * from the state after it, because a pitch that ends the plate appearance
+ * resets the count to 0-0 (GAME_DESIGN.md 3.4) and would otherwise report
+ * "Strike 0".
+ */
+export function describePitch(opts: {
+  location: PitchLocation
+  kind: 'called-strike' | 'ball' | 'foul' | 'whiff' | 'in-play' | 'bunt'
+  buntResult?: 'sacrifice' | 'foul-bunt' | 'pop-up' | 'bunt-single'
+  countBefore: Count
+}): string | null {
+  const { location, kind, countBefore } = opts
+  const inZone = location === 'zone'
+
+  const afterStrike = (): string => {
+    const strikes = countBefore.strikes + 1
+    return strikes >= STRIKES_FOR_STRIKEOUT ? 'Strike 3.' : `Strike ${strikes}.`
+  }
+
+  switch (kind) {
+    case 'called-strike':
+      return `Taken in the zone. ${afterStrike()}`
+    case 'ball': {
+      const balls = countBefore.balls + 1
+      return `Taken outside. ${balls >= BALLS_FOR_WALK ? 'Ball 4.' : `Ball ${balls}.`}`
+    }
+    case 'whiff':
+      return inZone
+        ? `Swung and missed at a strike. ${afterStrike()}`
+        : `Chased one out of the zone. ${afterStrike()}`
+    case 'foul': {
+      const what = inZone ? 'Fouled off a strike.' : 'Fouled off a pitch out of the zone.'
+      // A foul with two strikes keeps the count (GAME_DESIGN.md 3.4).
+      if (countBefore.strikes >= STRIKES_FOR_STRIKEOUT - 1) {
+        return `${what} Still ${countBefore.balls}-${countBefore.strikes}.`
+      }
+      return `${what} Strike ${countBefore.strikes + 1}.`
+    }
+    case 'bunt':
+      if (opts.buntResult === 'foul-bunt') return `Bunt fouled off. ${afterStrike()}`
+      return null
+    case 'in-play':
+      return null
+  }
+}
+
+const HIT_VERBS: Partial<Record<PlateAppearanceEvent, string>> = {
+  single: 'singles',
+  double: 'doubles',
+  triple: 'triples',
+  hr: 'homers'
+}
+
+/**
+ * Inserts the batter's season tally for this hit type right after the verb
+ * in the play line: "Dee Okafor singles." -> "Dee Okafor singles (3).".
+ * `stats` must already include this plate appearance -- the count shown is
+ * "how many of these has he hit this season", including the one just now.
+ *
+ * A no-op for anything but a single/double/triple/homer (a walk, an out, a
+ * bunt single -- those don't get a season count inline), and for a play
+ * line that doesn't start with "batterName verb" for some other reason
+ * (defensive; shouldn't happen given describePlay's fixed wording).
+ */
+export function withSeasonHitCount(
+  play: string,
+  batterName: string,
+  event: PlateAppearanceEvent,
+  stats: BatterStats
+): string {
+  const verb = HIT_VERBS[event]
+  if (verb === undefined) return play
+
+  const count = event === 'single' ? singlesOf(stats) : event === 'double' ? stats.doubles : event === 'triple' ? stats.triples : stats.hr
+  const prefix = `${batterName} ${verb}`
+  if (!play.startsWith(prefix)) return play
+  return `${prefix} (${count})${play.slice(prefix.length)}`
+}
+
+/**
+ * The pitcher's workload for the line under the read: his pitch count for
+ * the whole game and the count for this plate appearance, as
+ * "61 P · 5 this at-bat". PitcherRead prefixes the tendency itself, so this
+ * deliberately does not repeat it.
+ *
+ * The game total is the pitcher's own, not the number of pitches the
+ * batting side has seen -- it is the figure that says whether he is tiring.
+ */
+export function pitchCountLabel(gamePitches: number, atBatPitches: number): string {
+  return `${gamePitches} P · ${atBatPitches} this at-bat`
+}
+
+/**
+ * The "Up next" headline: which game, home or away, against whom, and how
+ * that opponent has been going. "Game 3 at Ashford Wrens · 2–1".
+ *
+ * The record is the opponent's, not yours -- the point of the line is to
+ * tell you what you are walking into.
+ */
+export function upNextHeadline(opts: {
+  gameNumber: number
+  isHome: boolean
+  opponentName: string
+  opponentWins: number
+  opponentLosses: number
+}): string {
+  const where = opts.isHome ? 'vs' : 'at'
+  return `Game ${opts.gameNumber} ${where} ${opts.opponentName} · ${opts.opponentWins}–${opts.opponentLosses}`
+}
+
+/**
+ * The scouting line on the pitcher you are about to face, in the same
+ * shorthand the batter card uses for its ratings.
+ * "Grady Thornton · CTL 55 · STF 45 · Attacker".
+ */
+export function pitcherPreview(opts: {
+  name: string
+  control: number
+  stuff: number
+  tendency: Tendency
+}): string {
+  return `${opts.name} · CTL ${opts.control} · STF ${opts.stuff} · ${opts.tendency}`
 }

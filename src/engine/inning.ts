@@ -21,6 +21,22 @@ import { INNINGS_PER_GAME, OUTS_PER_HALF_INNING, BALLS_FOR_WALK, STRIKES_FOR_STR
 
 const EMPTY_BASES: Bases = { first: null, second: null, third: null }
 
+/**
+ * This game's strikeouts per side, reading a game saved before the counter
+ * existed as 0-0 rather than undefined. See GameState.strikeouts.
+ */
+export function strikeoutsOf(state: GameState): { home: number; away: number } {
+  return state.strikeouts ?? { home: 0, away: 0 }
+}
+
+/**
+ * This game's pitch counts, reading a game saved before the counters
+ * existed as zeroes rather than undefined. See GameState.pitchCounts.
+ */
+export function pitchCountsOf(state: GameState): { home: number; away: number; thisAtBat: number } {
+  return state.pitchCounts ?? { home: 0, away: 0, thisAtBat: 0 }
+}
+
 export interface Teams {
   home: Team
   away: Team
@@ -119,12 +135,82 @@ function describeCount(count: Count): string {
   return `${count.balls}-${count.strikes}`
 }
 
+// ============================================================================
+// Out flavour (play log colour)
+// ============================================================================
+
+/**
+ * How an out looked, for the play log: "grounded out to short", "flied out
+ * to center". Purely descriptive -- it never changes what happened, only
+ * how it reads.
+ *
+ * The variation is indexed off the RNG's state AFTER the pitch rather than
+ * drawn from it. That is deliberate: a new draw would shift the RNG stream,
+ * which would change every tuned measurement in TUNING.md and make existing
+ * saves replay differently. Reading the state is a pure function of a
+ * number the pitch already produced, so a game still replays identically
+ * from its seed.
+ *
+ * The two tables differ by swing, as a Power swing and a Contact swing put
+ * the ball in the air at very different rates: Contact skews to the
+ * infield and to grounders, Power to the outfield and to fly balls.
+ * Entries repeat where an outcome should be commoner.
+ */
+const CONTACT_OUTS: readonly string[] = [
+  'grounded out to short',
+  'grounded out to short',
+  'grounded out to second',
+  'grounded out to second',
+  'grounded out to third',
+  'grounded out to first',
+  'grounded out to the pitcher',
+  'lined out to left',
+  'lined out to center',
+  'popped out to second',
+  'popped out to the catcher',
+  'flied out to left',
+  'flied out to center',
+  'flied out to right'
+]
+
+const POWER_OUTS: readonly string[] = [
+  'flied out to left',
+  'flied out to center',
+  'flied out to center',
+  'flied out to right',
+  'flied out to deep center',
+  'flied out to the warning track in left',
+  'lined out to left',
+  'lined out to center',
+  'lined out to right',
+  'lined out to third',
+  'popped out to the catcher',
+  'grounded out to short',
+  'grounded out to third'
+]
+
+/** Which way the ball left the bat, given the swing and a pitch-derived index. */
+export function outFlavor(swing: Choice, flavorSeed: number): string {
+  const table = swing === 'Power' ? POWER_OUTS : CONTACT_OUTS
+  const idx = Math.abs(Math.trunc(flavorSeed)) % table.length
+  return table[idx]
+}
+
+/** How a sacrifice fly looked. Always to the outfield -- that is what makes it a sac fly. */
+const SAC_FLY_FIELDS: readonly string[] = ['left', 'center', 'right', 'deep center', 'deep right']
+
+export function sacrificeFlyField(flavorSeed: number): string {
+  return SAC_FLY_FIELDS[Math.abs(Math.trunc(flavorSeed)) % SAC_FLY_FIELDS.length]
+}
+
 function describePlay(
   batter: Batter,
   event: PlateAppearanceEvent,
   count: Count,
   runsScored: BatterId[],
-  battingTeam: Team
+  battingTeam: Team,
+  swing: Choice,
+  flavorSeed: number
 ): string {
   const scorers = runsScored.map((id) => battingTeam.batters.find((b) => b.id === id)?.name ?? id)
   const scoreSuffix =
@@ -146,9 +232,9 @@ function describePlay(
     case 'double-play':
       return `${batter.name} grounds into a double play.`
     case 'sacrifice-fly':
-      return `${batter.name} flies out. ${scorers.join(', ')} scores on the sacrifice fly.`
+      return `${batter.name} flied out to ${sacrificeFlyField(flavorSeed)}. ${scorers.join(', ')} scores on the sacrifice fly.`
     case 'out':
-      return `${batter.name} is out.`
+      return `${batter.name} ${outFlavor(swing, flavorSeed)}.`
     case 'sacrifice-bunt':
       return `${batter.name} sacrifices.${scoreSuffix}`
     case 'bunt-single':
@@ -273,9 +359,19 @@ export function applyPitch(state: GameState, choice: Choice, teams: Teams, rng: 
   const battingIdx = battingSide(state.half)
   const battingTeam = teamFor(teams, battingIdx)
 
+  // Every pitch counts against the pitcher who threw it, and against the
+  // plate appearance until that appearance ends.
+  const pitchingIdx = pitchingSide(state.half)
+  const priorCounts = pitchCountsOf(state)
+  const pitchCounts = {
+    ...priorCounts,
+    [pitchingIdx]: priorCounts[pitchingIdx] + 1,
+    thisAtBat: paEnded ? 0 : priorCounts.thisAtBat + 1
+  }
+
   let play: string | null = null
   if (paEnded && event !== null) {
-    play = describePlay(batter, event, state.count, runsScored, battingTeam)
+    play = describePlay(batter, event, state.count, runsScored, battingTeam, choice, rng.state())
   }
 
   // Credit runs and hits.
@@ -297,6 +393,10 @@ export function applyPitch(state: GameState, choice: Choice, teams: Teams, rng: 
   if (isHit) {
     hits = { ...hits, [battingIdx]: hits[battingIdx] + 1 }
   }
+  let strikeouts = strikeoutsOf(state)
+  if (event === 'strikeout') {
+    strikeouts = { ...strikeouts, [battingIdx]: strikeouts[battingIdx] + 1 }
+  }
 
   // Advance the batting order only when the plate appearance ended.
   let currentBatterIndex = state.currentBatterIndex
@@ -315,6 +415,8 @@ export function applyPitch(state: GameState, choice: Choice, teams: Teams, rng: 
     homeScore,
     awayScore,
     hits,
+    strikeouts,
+    pitchCounts,
     lineScore,
     currentBatterIndex,
     plays,
@@ -458,6 +560,8 @@ export function createGame(args: CreateGameArgs): GameState {
     awayScore: 0,
     lineScore: { home: [], away: [] },
     hits: { home: 0, away: 0 },
+    strikeouts: { home: 0, away: 0 },
+    pitchCounts: { home: 0, away: 0, thisAtBat: 0 },
     currentBatterIndex: { home: 0, away: 0 },
     rngState: rng.state(),
     plays: [],

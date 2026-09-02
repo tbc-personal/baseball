@@ -13,7 +13,12 @@ import {
   previewSummary,
   describeHalfInning,
   milestoneLine,
-  gameResultLine
+  gameResultLine,
+  describePitch,
+  withSeasonHitCount,
+  pitchCountLabel,
+  upNextHeadline,
+  pitcherPreview
 } from '../src/ui/format'
 import { sortBatting, type BattingRow } from '../src/ui/SeasonScreen'
 import type { BatterStats } from '../src/engine/types'
@@ -244,5 +249,194 @@ describe('gameResultLine', () => {
 
   it('uses an en dash, matching the scoreboard elsewhere', () => {
     expect(gameResultLine({ homeShort: 'Herons', awayShort: 'Wrens', homeScore: 5, awayScore: 4 })).toContain('–')
+  })
+})
+
+describe('describePitch', () => {
+  const c = (balls: number, strikes: number) => ({ balls, strikes })
+
+  it('says a taken strike was in the zone, and counts it', () => {
+    expect(describePitch({ location: 'zone', kind: 'called-strike', countBefore: c(1, 1) })).toBe(
+      'Taken in the zone. Strike 2.'
+    )
+  })
+
+  it('says a taken ball was outside, and counts it', () => {
+    expect(describePitch({ location: 'ball', kind: 'ball', countBefore: c(1, 2) })).toBe('Taken outside. Ball 2.')
+  })
+
+  it('distinguishes a swing at a strike from a chase', () => {
+    expect(describePitch({ location: 'zone', kind: 'whiff', countBefore: c(0, 1) })).toBe(
+      'Swung and missed at a strike. Strike 2.'
+    )
+    expect(describePitch({ location: 'ball', kind: 'whiff', countBefore: c(0, 1) })).toBe(
+      'Chased one out of the zone. Strike 2.'
+    )
+  })
+
+  it('distinguishes a foul off a strike from a foul off a ball', () => {
+    expect(describePitch({ location: 'zone', kind: 'foul', countBefore: c(0, 0) })).toBe(
+      'Fouled off a strike. Strike 1.'
+    )
+    expect(describePitch({ location: 'ball', kind: 'foul', countBefore: c(2, 1) })).toBe(
+      'Fouled off a pitch out of the zone. Strike 2.'
+    )
+  })
+
+  it('reports a two-strike foul as holding the count, because it does', () => {
+    expect(describePitch({ location: 'zone', kind: 'foul', countBefore: c(3, 2) })).toBe(
+      'Fouled off a strike. Still 3-2.'
+    )
+  })
+
+  it('names the pitch that ends the plate appearance rather than reporting strike 0', () => {
+    // The engine resets the count to 0-0 on a PA-ending pitch, so this is
+    // derived from the count before the pitch.
+    expect(describePitch({ location: 'zone', kind: 'called-strike', countBefore: c(1, 2) })).toBe(
+      'Taken in the zone. Strike 3.'
+    )
+    expect(describePitch({ location: 'ball', kind: 'ball', countBefore: c(3, 2) })).toBe('Taken outside. Ball 4.')
+  })
+
+  it('describes a foul bunt but leaves the other bunt outcomes to the play line', () => {
+    expect(describePitch({ location: 'zone', kind: 'bunt', buntResult: 'foul-bunt', countBefore: c(0, 0) })).toBe(
+      'Bunt fouled off. Strike 1.'
+    )
+    for (const batted of ['sacrifice', 'pop-up', 'bunt-single'] as const) {
+      expect(describePitch({ location: 'zone', kind: 'bunt', buntResult: batted, countBefore: c(0, 0) })).toBeNull()
+    }
+  })
+
+  it('says nothing for a ball in play, which the play line already covers', () => {
+    expect(describePitch({ location: 'zone', kind: 'in-play', countBefore: c(1, 1) })).toBeNull()
+  })
+})
+
+describe('sortBatting by strikeouts', () => {
+  const row = (label: string, k: number): BattingRow => ({
+    batterId: label,
+    label,
+    stats: { batterId: label, pa: 10, ab: 10, h: 3, doubles: 0, triples: 0, hr: 0, bb: 0, k, r: 0, rbi: 0 }
+  })
+
+  it('puts the most strikeouts first, matching the other counting columns', () => {
+    const sorted = sortBatting([row('a', 2), row('b', 9), row('c', 5)], 'k')
+    expect(sorted.map((r) => r.label)).toEqual(['b', 'c', 'a'])
+  })
+
+  it('breaks ties by name, as the other keys do', () => {
+    const sorted = sortBatting([row('z', 4), row('a', 4)], 'k')
+    expect(sorted.map((r) => r.label)).toEqual(['a', 'z'])
+  })
+})
+
+describe('withSeasonHitCount', () => {
+  const stats = (over: Partial<BatterStats>): BatterStats => ({
+    batterId: 'b1',
+    pa: 0,
+    ab: 0,
+    h: 0,
+    doubles: 0,
+    triples: 0,
+    hr: 0,
+    bb: 0,
+    k: 0,
+    r: 0,
+    rbi: 0,
+    ...over
+  })
+
+  it('inserts the singles tally right after the verb', () => {
+    // h - doubles - triples - hr = 4 - 1 - 0 - 1 = 2
+    const s = stats({ h: 4, doubles: 1, hr: 1 })
+    expect(withSeasonHitCount('Dee Okafor singles.', 'Dee Okafor', 'single', s)).toBe('Dee Okafor singles (2).')
+  })
+
+  it('inserts the doubles tally', () => {
+    const s = stats({ h: 2, doubles: 2 })
+    expect(withSeasonHitCount('Dee Okafor doubles.', 'Dee Okafor', 'double', s)).toBe('Dee Okafor doubles (2).')
+  })
+
+  it('inserts the triples tally', () => {
+    const s = stats({ h: 1, triples: 1 })
+    expect(withSeasonHitCount('Dee Okafor triples.', 'Dee Okafor', 'triple', s)).toBe('Dee Okafor triples (1).')
+  })
+
+  it('inserts the home run tally before the exclamation point', () => {
+    const s = stats({ h: 5, hr: 5 })
+    expect(withSeasonHitCount('Dee Okafor homers!', 'Dee Okafor', 'hr', s)).toBe('Dee Okafor homers (5)!')
+  })
+
+  it('keeps a scoring suffix after the inserted count', () => {
+    const s = stats({ h: 1, hr: 1 })
+    expect(withSeasonHitCount('Dee Okafor homers! Ruth Halvorsen scores.', 'Dee Okafor', 'hr', s)).toBe(
+      'Dee Okafor homers (1)! Ruth Halvorsen scores.'
+    )
+  })
+
+  it('leaves non-hit events unchanged', () => {
+    const s = stats({ bb: 1 })
+    expect(withSeasonHitCount('Dee Okafor walks.', 'Dee Okafor', 'walk', s)).toBe('Dee Okafor walks.')
+    expect(withSeasonHitCount('Dee Okafor strikes out on a 3-2 pitch.', 'Dee Okafor', 'strikeout', s)).toBe(
+      'Dee Okafor strikes out on a 3-2 pitch.'
+    )
+  })
+
+  it('leaves a bunt single unchanged -- its wording does not match the "singles" verb', () => {
+    const s = stats({ h: 1 })
+    expect(withSeasonHitCount('Dee Okafor bunts for a single.', 'Dee Okafor', 'bunt-single', s)).toBe(
+      'Dee Okafor bunts for a single.'
+    )
+  })
+})
+
+describe('pitchCountLabel', () => {
+  it('shows the game total and the at-bat total, without repeating the tendency', () => {
+    expect(pitchCountLabel(61, 5)).toBe('61 P · 5 this at-bat')
+    // PitcherRead renders "{tendency} · {pitchLabel}", so a tendency here
+    // would print twice.
+    expect(pitchCountLabel(61, 5)).not.toMatch(/Neutral|Attacker|Nibbler/)
+  })
+
+  it('handles the first pitch of a game', () => {
+    expect(pitchCountLabel(0, 0)).toBe('0 P · 0 this at-bat')
+  })
+})
+
+describe('upNextHeadline', () => {
+  it('says at for a road game and vs for a home game', () => {
+    expect(
+      upNextHeadline({ gameNumber: 3, isHome: false, opponentName: 'Ashford Wrens', opponentWins: 2, opponentLosses: 1 })
+    ).toBe('Game 3 at Ashford Wrens · 2–1')
+    expect(
+      upNextHeadline({ gameNumber: 4, isHome: true, opponentName: 'Silver Lake Loons', opponentWins: 0, opponentLosses: 3 })
+    ).toBe('Game 4 vs Silver Lake Loons · 0–3')
+  })
+
+  it('shows the OPPONENT record, which is the point of the line', () => {
+    // 7-1 here is the opponent's, not yours.
+    expect(
+      upNextHeadline({ gameNumber: 9, isHome: false, opponentName: 'Kestrels', opponentWins: 7, opponentLosses: 1 })
+    ).toContain('7–1')
+  })
+
+  it('handles a fresh season, where nobody has a record yet', () => {
+    expect(
+      upNextHeadline({ gameNumber: 1, isHome: false, opponentName: 'Ashford Wrens', opponentWins: 0, opponentLosses: 0 })
+    ).toBe('Game 1 at Ashford Wrens · 0–0')
+  })
+})
+
+describe('pitcherPreview', () => {
+  it('scouts the starter in the batter card shorthand', () => {
+    expect(pitcherPreview({ name: 'Grady Thornton', control: 55, stuff: 45, tendency: 'Attacker' })).toBe(
+      'Grady Thornton · CTL 55 · STF 45 · Attacker'
+    )
+  })
+
+  it('carries the tendency through, since it shifts the zone rate', () => {
+    for (const tendency of ['Attacker', 'Nibbler', 'Neutral'] as const) {
+      expect(pitcherPreview({ name: 'X', control: 50, stuff: 50, tendency })).toContain(tendency)
+    }
   })
 })

@@ -278,11 +278,18 @@ export function onBasePercentage(stats: BatterStats): number {
   return denominator === 0 ? 0 : (stats.h + stats.bb) / denominator
 }
 
+/** Singles aren't tracked directly -- a hit that isn't a double, triple, or homer. */
+export function singlesOf(stats: BatterStats): number {
+  return stats.h - stats.doubles - stats.triples - stats.hr
+}
+
 export function sluggingPercentage(stats: BatterStats): number {
   if (stats.ab === 0) return 0
-  const singles = stats.h - stats.doubles - stats.triples - stats.hr
   const totalBases =
-    singles * SLG_SINGLE_WEIGHT + stats.doubles * SLG_DOUBLE_WEIGHT + stats.triples * SLG_TRIPLE_WEIGHT + stats.hr * SLG_HR_WEIGHT
+    singlesOf(stats) * SLG_SINGLE_WEIGHT +
+    stats.doubles * SLG_DOUBLE_WEIGHT +
+    stats.triples * SLG_TRIPLE_WEIGHT +
+    stats.hr * SLG_HR_WEIGHT
   return totalBases / stats.ab
 }
 
@@ -299,6 +306,36 @@ export interface StandingsRow extends TeamRecord {
   gamesBack: number
   runDifferential: number
   lastFiveDisplay: string
+}
+
+/**
+ * The short name for a team the player renamed. The built-in teams carry
+ * both a full name and a short one ("Harbor Herons" / "Herons"), but the
+ * Settings field is a single string, so the short form is the last word --
+ * the same shape as every name in section 5.2. A one-word name is used
+ * whole.
+ */
+export function shortenTeamName(name: string): string {
+  const words = name.trim().split(/\s+/)
+  return words.length > 1 ? words[words.length - 1] : name.trim()
+}
+
+/**
+ * The names to show for a team: the fixed section 5.2 content, except for
+ * the player's own team once they have renamed it in Settings.
+ *
+ * One rule in one place. Every screen that prints a team name goes through
+ * here, so the standings, the scoreboard, the line score and the result
+ * line cannot disagree about what your team is called. A blank or
+ * whitespace-only override falls back to the built-in names.
+ */
+export function teamDisplayNames(teamId: TeamId, ownTeamName?: string): { name: string; shortName: string } {
+  const team = teamLookup()[teamId]
+  const custom = ownTeamName?.trim()
+  if (teamId === HERONS_TEAM_ID && custom !== undefined && custom !== '') {
+    return { name: custom, shortName: shortenTeamName(custom) }
+  }
+  return { name: team?.name ?? teamId, shortName: team?.shortName ?? teamId }
 }
 
 /**
@@ -319,9 +356,10 @@ export interface StandingsRow extends TeamRecord {
  * list is ordered by bird name rather than by the string it displays;
  * the two names cannot both sort alphabetically at once.
  */
-export function standingsTable(season: SeasonState): StandingsRow[] {
-  const lookup = teamLookup()
-  const nameOf = (id: TeamId): string => lookup[id]?.shortName ?? lookup[id]?.name ?? id
+export function standingsTable(season: SeasonState, ownTeamName?: string): StandingsRow[] {
+  const displayName = (id: TeamId): string => teamDisplayNames(id, ownTeamName).name
+  const displayShortName = (id: TeamId): string => teamDisplayNames(id, ownTeamName).shortName
+  const nameOf = (id: TeamId): string => displayShortName(id)
   const sorted = [...season.standings].sort((a, b) => {
     const pctDiff = winPct(b) - winPct(a)
     if (pctDiff !== 0) return pctDiff
@@ -333,8 +371,8 @@ export function standingsTable(season: SeasonState): StandingsRow[] {
 
   return sorted.map((record) => ({
     ...record,
-    teamName: lookup[record.teamId]?.name ?? record.teamId,
-    teamShortName: lookup[record.teamId]?.shortName ?? record.teamId,
+    teamName: displayName(record.teamId),
+    teamShortName: displayShortName(record.teamId),
     winPct: winPct(record),
     gamesBack: leader ? (leader.wins - record.wins + (record.losses - leader.losses)) / GAMES_BACK_DIVISOR : 0,
     runDifferential: record.runsFor - record.runsAgainst,
