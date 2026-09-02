@@ -59,9 +59,11 @@ import {
   halfInningLabel,
   ordinal,
   pitchCountLabel,
+  pitcherPreview,
   primaryAction,
   resumeSentence,
   surname,
+  upNextHeadline,
   withSeasonHitCount
 } from './format'
 
@@ -531,9 +533,27 @@ export function App() {
       ownTeamId={HERONS_TEAM_ID}
       upNext={
         nextScheduled && (game === null || game.isOver)
-          ? `Game ${nextScheduled.gameIndex + 1} ${nextScheduled.homeTeamId === HERONS_TEAM_ID ? 'vs' : 'at'} ${
-              teamById(nextScheduled.homeTeamId === HERONS_TEAM_ID ? nextScheduled.awayTeamId : nextScheduled.homeTeamId).name
-            }`
+          ? (() => {
+              const isHome = nextScheduled.homeTeamId === HERONS_TEAM_ID
+              const opponent = teamById(isHome ? nextScheduled.awayTeamId : nextScheduled.homeTeamId)
+              const record = standings.find((r) => r.teamId === opponent.id)
+              const starter = pitcherForGame(opponent, nextScheduled.gameIndex)
+              return {
+                headline: upNextHeadline({
+                  gameNumber: nextScheduled.gameIndex + 1,
+                  isHome,
+                  opponentName: opponent.name,
+                  opponentWins: record?.wins ?? 0,
+                  opponentLosses: record?.losses ?? 0
+                }),
+                pitcher: pitcherPreview({
+                  name: starter.name,
+                  control: starter.control,
+                  stuff: starter.stuff,
+                  tendency: starter.tendency
+                })
+              }
+            })()
           : null
       }
       onPrimary={beginPlaying}

@@ -16,7 +16,9 @@ import {
   gameResultLine,
   describePitch,
   withSeasonHitCount,
-  pitchCountLabel
+  pitchCountLabel,
+  upNextHeadline,
+  pitcherPreview
 } from '../src/ui/format'
 import { sortBatting, type BattingRow } from '../src/ui/SeasonScreen'
 import type { BatterStats } from '../src/engine/types'
@@ -398,5 +400,43 @@ describe('pitchCountLabel', () => {
 
   it('handles the first pitch of a game', () => {
     expect(pitchCountLabel(0, 0)).toBe('0 P · 0 this at-bat')
+  })
+})
+
+describe('upNextHeadline', () => {
+  it('says at for a road game and vs for a home game', () => {
+    expect(
+      upNextHeadline({ gameNumber: 3, isHome: false, opponentName: 'Ashford Wrens', opponentWins: 2, opponentLosses: 1 })
+    ).toBe('Game 3 at Ashford Wrens · 2–1')
+    expect(
+      upNextHeadline({ gameNumber: 4, isHome: true, opponentName: 'Silver Lake Loons', opponentWins: 0, opponentLosses: 3 })
+    ).toBe('Game 4 vs Silver Lake Loons · 0–3')
+  })
+
+  it('shows the OPPONENT record, which is the point of the line', () => {
+    // 7-1 here is the opponent's, not yours.
+    expect(
+      upNextHeadline({ gameNumber: 9, isHome: false, opponentName: 'Kestrels', opponentWins: 7, opponentLosses: 1 })
+    ).toContain('7–1')
+  })
+
+  it('handles a fresh season, where nobody has a record yet', () => {
+    expect(
+      upNextHeadline({ gameNumber: 1, isHome: false, opponentName: 'Ashford Wrens', opponentWins: 0, opponentLosses: 0 })
+    ).toBe('Game 1 at Ashford Wrens · 0–0')
+  })
+})
+
+describe('pitcherPreview', () => {
+  it('scouts the starter in the batter card shorthand', () => {
+    expect(pitcherPreview({ name: 'Grady Thornton', control: 55, stuff: 45, tendency: 'Attacker' })).toBe(
+      'Grady Thornton · CTL 55 · STF 45 · Attacker'
+    )
+  })
+
+  it('carries the tendency through, since it shifts the zone rate', () => {
+    for (const tendency of ['Attacker', 'Nibbler', 'Neutral'] as const) {
+      expect(pitcherPreview({ name: 'X', control: 50, stuff: 50, tendency })).toContain(tendency)
+    }
   })
 })
