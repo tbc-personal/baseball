@@ -20,7 +20,7 @@ export const RATING_ADJ_DIVISOR = 100
 // ============================================================================
 
 /** Base in-zone probability before modifiers */
-export const BASE_ZONE_PROBABILITY = 0.48
+export const BASE_ZONE_PROBABILITY = 0.518
 
 /** Count modifiers for p_zone calculation: count -> adjustment */
 export const COUNT_MOD: Record<string, number> = {
@@ -73,10 +73,10 @@ export const READ_BASE_ACCURACY = 0.7
  * Whiff probability is later multiplied by: 1 + adj(Stuff) - adj(Contact)
  */
 export const PITCH_OUTCOMES: Record<string, [number, number, number]> = {
-  'contact-zone': [0.42, 0.45, 0.13],
-  'contact-ball': [0.2, 0.45, 0.35],
-  'power-zone': [0.35, 0.4, 0.25],
-  'power-ball': [0.12, 0.38, 0.5]
+  'contact-zone': [0.5, 0.4, 0.1],
+  'contact-ball': [0.3, 0.5, 0.2],
+  'power-zone': [0.3, 0.5, 0.2],
+  'power-ball': [0.1, 0.5, 0.4]
 }
 
 // Note: Take choice is deterministic (called strike if zone, ball if ball)
@@ -91,10 +91,10 @@ export const PITCH_OUTCOMES: Record<string, [number, number, number]> = {
  * Rating shifts are applied before normalization.
  */
 export const BATTED_BALL_OUTCOMES: Record<string, [number, number, number, number, number]> = {
-  'contact-zone': [0.62, 0.27, 0.07, 0.01, 0.03],
-  'contact-ball': [0.75, 0.2, 0.04, 0.005, 0.005],
-  'power-zone': [0.58, 0.15, 0.12, 0.01, 0.14],
-  'power-ball': [0.74, 0.13, 0.07, 0.01, 0.05]
+  'contact-zone': [0.5607, 0.3121, 0.0809, 0.0116, 0.0347],
+  'contact-ball': [0.825, 0.14, 0.028, 0.0035, 0.0035],
+  'power-zone': [0.5422, 0.1635, 0.1308, 0.0109, 0.1526],
+  'power-ball': [0.818, 0.091, 0.049, 0.007, 0.035]
 }
 
 /**
@@ -131,13 +131,13 @@ export const BUNT_OUTCOMES: Record<string, number> = {
 // ============================================================================
 
 /** R2 scores on single with this probability (else to third) */
-export const BASE_RUNNING_R2_SCORES_ON_SINGLE = 0.65
+export const BASE_RUNNING_R2_SCORES_ON_SINGLE = 0.78
 
 /** R1 advances to third on single (if third is open) */
-export const BASE_RUNNING_R1_THIRD_ON_SINGLE = 0.3
+export const BASE_RUNNING_R1_THIRD_ON_SINGLE = 0.4
 
 /** R1 scores on double with this probability (else to third) */
-export const BASE_RUNNING_R1_SCORES_ON_DOUBLE = 0.45
+export const BASE_RUNNING_R1_SCORES_ON_DOUBLE = 0.58
 
 /** Double play probability on groundout with runners on base */
 export const BASE_RUNNING_DOUBLE_PLAY = 0.12
