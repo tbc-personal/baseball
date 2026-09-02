@@ -220,4 +220,9 @@ export interface SeasonState {
 
   // Milestones already triggered (to avoid duplicates)
   firedMilestones: string[]
+
+  // RNG state for season-level randomness (schedule construction, and
+  // simulating other teams' games alongside each Herons game -- T4).
+  // Same save/resume convention as GameState.rngState.
+  rngState: number
 }
