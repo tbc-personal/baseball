@@ -40,6 +40,7 @@ export interface AtBatScreenProps {
 
   recommended: Choice
   buntAvailable: boolean
+  lastPitch: string | null
   lastPlay: string | null
 
   onChoose: (choice: Choice) => void
@@ -73,7 +74,7 @@ export function AtBatScreen(props: AtBatScreenProps) {
         onChoose={props.onChoose}
         disabled={props.disabled}
       />
-      <LastPlay play={props.lastPlay} />
+      <LastPlay pitch={props.lastPitch} play={props.lastPlay} />
     </div>
   )
 }

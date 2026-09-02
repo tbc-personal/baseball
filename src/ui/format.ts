@@ -6,7 +6,7 @@
  * tested directly without @testing-library/preact (tests/ui.at-bat.test.tsx).
  */
 
-import type { Bases, Batter, BatterStats, Count, HalfInning } from '../engine/types'
+import type { Bases, Batter, BatterStats, Count, HalfInning, PitchLocation } from '../engine/types'
 import { battingAverage } from '../engine/season'
 import { BALLS_FOR_WALK, STRIKES_FOR_STRIKEOUT, OUTS_PER_HALF_INNING } from '../engine/constants'
 
@@ -332,4 +332,59 @@ export function gameResultLine(opts: {
   const high = Math.max(opts.homeScore, opts.awayScore)
   const low = Math.min(opts.homeScore, opts.awayScore)
   return `${winner} win ${high}–${low}`
+}
+
+/**
+ * What just happened on this pitch, for the at-bat screen: whether the
+ * pitch was in the zone, what the batter did about it, and where that
+ * leaves the count. "Taken in the zone. Strike 2."
+ *
+ * Returns null when the pitch put the ball in play or produced a bunt that
+ * is not a foul -- the play line already describes those, and repeating
+ * "In play" above "Dee Okafor singles." says nothing.
+ *
+ * The count is derived from the count BEFORE the pitch rather than read
+ * from the state after it, because a pitch that ends the plate appearance
+ * resets the count to 0-0 (GAME_DESIGN.md 3.4) and would otherwise report
+ * "Strike 0".
+ */
+export function describePitch(opts: {
+  location: PitchLocation
+  kind: 'called-strike' | 'ball' | 'foul' | 'whiff' | 'in-play' | 'bunt'
+  buntResult?: 'sacrifice' | 'foul-bunt' | 'pop-up' | 'bunt-single'
+  countBefore: Count
+}): string | null {
+  const { location, kind, countBefore } = opts
+  const inZone = location === 'zone'
+
+  const afterStrike = (): string => {
+    const strikes = countBefore.strikes + 1
+    return strikes >= STRIKES_FOR_STRIKEOUT ? 'Strike 3.' : `Strike ${strikes}.`
+  }
+
+  switch (kind) {
+    case 'called-strike':
+      return `Taken in the zone. ${afterStrike()}`
+    case 'ball': {
+      const balls = countBefore.balls + 1
+      return `Taken outside. ${balls >= BALLS_FOR_WALK ? 'Ball 4.' : `Ball ${balls}.`}`
+    }
+    case 'whiff':
+      return inZone
+        ? `Swung and missed at a strike. ${afterStrike()}`
+        : `Chased one out of the zone. ${afterStrike()}`
+    case 'foul': {
+      const what = inZone ? 'Fouled off a strike.' : 'Fouled off a pitch out of the zone.'
+      // A foul with two strikes keeps the count (GAME_DESIGN.md 3.4).
+      if (countBefore.strikes >= STRIKES_FOR_STRIKEOUT - 1) {
+        return `${what} Still ${countBefore.balls}-${countBefore.strikes}.`
+      }
+      return `${what} Strike ${countBefore.strikes + 1}.`
+    }
+    case 'bunt':
+      if (opts.buntResult === 'foul-bunt') return `Bunt fouled off. ${afterStrike()}`
+      return null
+    case 'in-play':
+      return null
+  }
 }

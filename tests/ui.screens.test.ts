@@ -13,7 +13,8 @@ import {
   previewSummary,
   describeHalfInning,
   milestoneLine,
-  gameResultLine
+  gameResultLine,
+  describePitch
 } from '../src/ui/format'
 import { sortBatting, type BattingRow } from '../src/ui/SeasonScreen'
 import type { BatterStats } from '../src/engine/types'
@@ -244,5 +245,65 @@ describe('gameResultLine', () => {
 
   it('uses an en dash, matching the scoreboard elsewhere', () => {
     expect(gameResultLine({ homeShort: 'Herons', awayShort: 'Wrens', homeScore: 5, awayScore: 4 })).toContain('–')
+  })
+})
+
+describe('describePitch', () => {
+  const c = (balls: number, strikes: number) => ({ balls, strikes })
+
+  it('says a taken strike was in the zone, and counts it', () => {
+    expect(describePitch({ location: 'zone', kind: 'called-strike', countBefore: c(1, 1) })).toBe(
+      'Taken in the zone. Strike 2.'
+    )
+  })
+
+  it('says a taken ball was outside, and counts it', () => {
+    expect(describePitch({ location: 'ball', kind: 'ball', countBefore: c(1, 2) })).toBe('Taken outside. Ball 2.')
+  })
+
+  it('distinguishes a swing at a strike from a chase', () => {
+    expect(describePitch({ location: 'zone', kind: 'whiff', countBefore: c(0, 1) })).toBe(
+      'Swung and missed at a strike. Strike 2.'
+    )
+    expect(describePitch({ location: 'ball', kind: 'whiff', countBefore: c(0, 1) })).toBe(
+      'Chased one out of the zone. Strike 2.'
+    )
+  })
+
+  it('distinguishes a foul off a strike from a foul off a ball', () => {
+    expect(describePitch({ location: 'zone', kind: 'foul', countBefore: c(0, 0) })).toBe(
+      'Fouled off a strike. Strike 1.'
+    )
+    expect(describePitch({ location: 'ball', kind: 'foul', countBefore: c(2, 1) })).toBe(
+      'Fouled off a pitch out of the zone. Strike 2.'
+    )
+  })
+
+  it('reports a two-strike foul as holding the count, because it does', () => {
+    expect(describePitch({ location: 'zone', kind: 'foul', countBefore: c(3, 2) })).toBe(
+      'Fouled off a strike. Still 3-2.'
+    )
+  })
+
+  it('names the pitch that ends the plate appearance rather than reporting strike 0', () => {
+    // The engine resets the count to 0-0 on a PA-ending pitch, so this is
+    // derived from the count before the pitch.
+    expect(describePitch({ location: 'zone', kind: 'called-strike', countBefore: c(1, 2) })).toBe(
+      'Taken in the zone. Strike 3.'
+    )
+    expect(describePitch({ location: 'ball', kind: 'ball', countBefore: c(3, 2) })).toBe('Taken outside. Ball 4.')
+  })
+
+  it('describes a foul bunt but leaves the other bunt outcomes to the play line', () => {
+    expect(describePitch({ location: 'zone', kind: 'bunt', buntResult: 'foul-bunt', countBefore: c(0, 0) })).toBe(
+      'Bunt fouled off. Strike 1.'
+    )
+    for (const batted of ['sacrifice', 'pop-up', 'bunt-single'] as const) {
+      expect(describePitch({ location: 'zone', kind: 'bunt', buntResult: batted, countBefore: c(0, 0) })).toBeNull()
+    }
+  })
+
+  it('says nothing for a ball in play, which the play line already covers', () => {
+    expect(describePitch({ location: 'zone', kind: 'in-play', countBefore: c(1, 1) })).toBeNull()
   })
 })
