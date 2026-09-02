@@ -116,6 +116,21 @@ export interface TeamRecord {
 }
 
 /**
+ * The pitch preview computed by preparePitch() and shown to the player
+ * before they choose. Stored on GameState so that saving mid-at-bat and
+ * resuming shows the exact same read the player already acted on, and so
+ * resolvePitch() can be replayed with the same p_zone (T3).
+ */
+export interface CurrentPitch {
+  /** p_zone fixed for the pitch about to be thrown */
+  pZone: number
+  /** The true bucket (not shown to the player; kept for tests/box score) */
+  trueBucket: ReadBucket
+  /** The bucket displayed on the at-bat screen */
+  displayedBucket: ReadBucket
+}
+
+/**
  * Complete game state (one game in progress)
  * Must be JSON-serializable for save/load.
  */
@@ -124,6 +139,15 @@ export interface GameState {
   gameIndex: number // 0-19
   homeTeamId: TeamId
   awayTeamId: TeamId
+
+  // Which pitcher each side is throwing this game (T3: rotation selection
+  // happens outside the engine; the engine just needs to know who's on
+  // the mound to resolve pitches)
+  homePitcherId: PitcherId
+  awayPitcherId: PitcherId
+
+  // The read/pZone already shown for the pitch about to be resolved
+  currentPitch: CurrentPitch
 
   // Game situation
   inning: number // 1-9 (may go higher in extra innings)

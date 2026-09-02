@@ -1,27 +1,18 @@
 import js from '@eslint/js';
-import tsPlugin from 'typescript-eslint';
+import tseslint from 'typescript-eslint';
 import globals from 'globals';
 
-export default [
+export default tseslint.config(
   {
     ignores: ['dist/', 'node_modules/', 'coverage/'],
   },
+  js.configs.recommended,
+  ...tseslint.configs.recommended,
   {
     files: ['**/*.{ts,tsx}'],
     languageOptions: {
-      parser: tsPlugin.parser,
-      parserOptions: {
-        ecmaVersion: 'latest',
-        sourceType: 'module',
-      },
-      globals: {
-        ...globals.browser,
-        ...globals.es2021,
-      },
-    },
-    rules: {
-      ...js.configs.recommended.rules,
-      ...tsPlugin.configs.recommended.rules,
+      parserOptions: { ecmaVersion: 'latest', sourceType: 'module' },
+      globals: { ...globals.browser, ...globals.es2021 },
     },
   },
-];
+);

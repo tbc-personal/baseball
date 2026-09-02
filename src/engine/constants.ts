@@ -144,3 +144,22 @@ export const BASE_RUNNING_DOUBLE_PLAY = 0.12
 
 /** Sacrifice fly probability on out with R3 on base (no DP) */
 export const BASE_RUNNING_SACRIFICE_FLY = 0.25
+
+// ============================================================================
+// Section 4: Game structure
+// ============================================================================
+
+/** Regulation length of a game, in innings. Extra innings continue past this. */
+export const INNINGS_PER_GAME = 9
+
+/** Number of batters in a full batting order */
+export const BATTERS_PER_LINEUP = 9
+
+/** Outs that end a half-inning */
+export const OUTS_PER_HALF_INNING = 3
+
+/** Balls that force a walk */
+export const BALLS_FOR_WALK = 4
+
+/** Strikes that force a strikeout */
+export const STRIKES_FOR_STRIKEOUT = 3
