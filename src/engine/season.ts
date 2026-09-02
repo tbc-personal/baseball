@@ -321,6 +321,24 @@ export function shortenTeamName(name: string): string {
 }
 
 /**
+ * The names to show for a team: the fixed section 5.2 content, except for
+ * the player's own team once they have renamed it in Settings.
+ *
+ * One rule in one place. Every screen that prints a team name goes through
+ * here, so the standings, the scoreboard, the line score and the result
+ * line cannot disagree about what your team is called. A blank or
+ * whitespace-only override falls back to the built-in names.
+ */
+export function teamDisplayNames(teamId: TeamId, ownTeamName?: string): { name: string; shortName: string } {
+  const team = teamLookup()[teamId]
+  const custom = ownTeamName?.trim()
+  if (teamId === HERONS_TEAM_ID && custom !== undefined && custom !== '') {
+    return { name: custom, shortName: shortenTeamName(custom) }
+  }
+  return { name: team?.name ?? teamId, shortName: team?.shortName ?? teamId }
+}
+
+/**
  * Standings rows sorted by win pct (ties broken by run differential, then
  * alphabetically by team name -- §5.3/§6 don't specify a tiebreaker), with
  * games back, run differential, and the L5 display string computed so the
@@ -339,15 +357,8 @@ export function shortenTeamName(name: string): string {
  * the two names cannot both sort alphabetically at once.
  */
 export function standingsTable(season: SeasonState, ownTeamName?: string): StandingsRow[] {
-  const lookup = teamLookup()
-  const displayName = (id: TeamId): string =>
-    id === HERONS_TEAM_ID && ownTeamName !== undefined && ownTeamName.trim() !== ''
-      ? ownTeamName.trim()
-      : (lookup[id]?.name ?? id)
-  const displayShortName = (id: TeamId): string =>
-    id === HERONS_TEAM_ID && ownTeamName !== undefined && ownTeamName.trim() !== ''
-      ? shortenTeamName(ownTeamName.trim())
-      : (lookup[id]?.shortName ?? id)
+  const displayName = (id: TeamId): string => teamDisplayNames(id, ownTeamName).name
+  const displayShortName = (id: TeamId): string => teamDisplayNames(id, ownTeamName).shortName
   const nameOf = (id: TeamId): string => displayShortName(id)
   const sorted = [...season.standings].sort((a, b) => {
     const pctDiff = winPct(b) - winPct(a)

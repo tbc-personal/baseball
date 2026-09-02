@@ -27,6 +27,7 @@ import {
   accumulateStats,
   teamById,
   standingsTable,
+  teamDisplayNames,
   recordGameResult,
   checkMilestones
 } from '../engine/season'
@@ -389,8 +390,8 @@ export function App() {
         resultLine={
           b.gameEnded && b.finalGame !== null
             ? gameResultLine({
-                homeShort: teamById(b.finalGame.homeTeamId).shortName,
-                awayShort: teamById(b.finalGame.awayTeamId).shortName,
+                homeShort: teamDisplayNames(b.finalGame.homeTeamId, appState.teamName).shortName,
+                awayShort: teamDisplayNames(b.finalGame.awayTeamId, appState.teamName).shortName,
                 homeScore: b.finalGame.homeScore,
                 awayScore: b.finalGame.awayScore
               })
@@ -414,7 +415,7 @@ export function App() {
               })
             : null
         }
-        lineScore={buildLineScore(lineScoreGame, shown)}
+        lineScore={buildLineScore(lineScoreGame, shown, appState.teamName)}
         nextLabel={b.gameEnded ? 'Next game' : `Play the ${ordinal(nextInningOf(lineScoreGame, b))}`}
         savedNote={savedNote(lineScoreGame, b)}
         onNext={() => {
@@ -453,7 +454,7 @@ export function App() {
 
     return (
       <AtBatScreen
-        ownTeamName={ownTeam.shortName}
+        ownTeamName={teamDisplayNames(ownTeam.id, appState.teamName).shortName}
         ownScore={ownSide === 'home' ? game.homeScore : game.awayScore}
         opponentName={opponentTeam.shortName}
         opponentScore={ownSide === 'home' ? game.awayScore : game.homeScore}
@@ -497,7 +498,7 @@ export function App() {
           return {
             homeOrAway: ownSide === 'home' ? 'home' : 'away',
             opponentName: (ownSide === 'home' ? teams.away : teams.home).name,
-            ownTeamShort: teams[ownSide].shortName,
+            ownTeamShort: teamDisplayNames(teams[ownSide].id, appState.teamName).shortName,
             ownScore: ownSide === 'home' ? game.homeScore : game.awayScore,
             opponentShort: (ownSide === 'home' ? teams.away : teams.home).shortName,
             opponentScore: ownSide === 'home' ? game.awayScore : game.homeScore,
@@ -580,14 +581,14 @@ function savedNote(game: GameState | null, b: BetweenData): string {
   return `Saved. ${game.homeScore}–${game.awayScore}.`
 }
 
-function buildLineScore(game: GameState | null, fallback: HalfInningRecap) {
+function buildLineScore(game: GameState | null, fallback: HalfInningRecap, ownTeamName?: string) {
   const ls = game?.lineScore ?? { home: [], away: [] }
   const homeId = game?.homeTeamId ?? HERONS_TEAM_ID
   const awayId = game?.awayTeamId ?? fallback.battingTeamId
   const ownSide = homeId === HERONS_TEAM_ID ? ('home' as const) : ('away' as const)
   return {
-    awayShort: teamById(awayId).shortName,
-    homeShort: teamById(homeId).shortName,
+    awayShort: teamDisplayNames(awayId, ownTeamName).shortName,
+    homeShort: teamDisplayNames(homeId, ownTeamName).shortName,
     away: ls.away,
     home: ls.home,
     awayRuns: game?.awayScore ?? 0,

@@ -10,6 +10,7 @@ import {
   singlesOf,
   standingsTable,
   shortenTeamName,
+  teamDisplayNames,
   recordGameResult,
   checkMilestones,
   simulateSeason,
@@ -507,5 +508,39 @@ describe('shortenTeamName', () => {
 
   it('tolerates stray whitespace', () => {
     expect(shortenTeamName('  Harbor   Herons  ')).toBe('Herons')
+  })
+})
+
+describe('teamDisplayNames', () => {
+  it('renames only the player\'s own team', () => {
+    expect(teamDisplayNames('herons', 'Portland Pickles')).toEqual({
+      name: 'Portland Pickles',
+      shortName: 'Pickles'
+    })
+    expect(teamDisplayNames('wrens', 'Portland Pickles')).toEqual({
+      name: 'Ashford Wrens',
+      shortName: 'Wrens'
+    })
+  })
+
+  it('falls back to the built-in names for undefined, empty or blank overrides', () => {
+    for (const override of [undefined, '', '   ']) {
+      expect(teamDisplayNames('herons', override)).toEqual({ name: 'Harbor Herons', shortName: 'Herons' })
+    }
+  })
+
+  it('trims a padded name rather than showing the padding', () => {
+    expect(teamDisplayNames('herons', '  Portland Pickles  ')).toEqual({
+      name: 'Portland Pickles',
+      shortName: 'Pickles'
+    })
+  })
+
+  it('is the same rule standingsTable uses, so screens cannot disagree', () => {
+    const season = createSeason(1)
+    const row = standingsTable(season, 'Portland Pickles').find((r) => r.teamId === 'herons')
+    const direct = teamDisplayNames('herons', 'Portland Pickles')
+    expect(row?.teamName).toBe(direct.name)
+    expect(row?.teamShortName).toBe(direct.shortName)
   })
 })
