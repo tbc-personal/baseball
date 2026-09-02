@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Short Season MASKABLE icon. Deliberately not the same file as icon.svg:
+       every mark sits inside the inner safe zone so the adaptive-icon mask
+       cannot crop the diamond. -->
+  <rect width="512" height="512" fill="#f4eee0"/>
+  <g transform="translate(256 256) scale(0.66) translate(-256 -256)">
+<!-- Infield: home bottom, first right, second top, third left -->
+  <path d="M256 400 L400 256 L256 112 L112 256 Z" fill="none" stroke="#23292d" stroke-width="18" stroke-linejoin="round"/>
+  <!-- No outfield arc: at favicon size the dashes turn to mud, and the arc
+       intersects the mound at this scale. -->
+  <!-- Pitcher's mound -->
+  <circle cx="256" cy="256" r="21" fill="none" stroke="#23292d" stroke-width="13"/>
+  <!-- Runners on first and third, in pencil red -->
+  <rect x="366" y="222" width="68" height="68" transform="rotate(45 400 256)" fill="#b5402c" stroke="#23292d" stroke-width="13"/>
+  <rect x="78" y="222" width="68" height="68" transform="rotate(45 112 256)" fill="#b5402c" stroke="#23292d" stroke-width="13"/>
+  <!-- Home plate -->
+  <path d="M226 392 L286 392 L286 420 L256 448 L226 420 Z" fill="#f4eee0" stroke="#23292d" stroke-width="13" stroke-linejoin="round"/>
+  </g>
+</svg>
