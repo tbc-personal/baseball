@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { applyPitch, createGame } from '../src/engine/inning'
+import { applyPitch, createGame, outFlavor, sacrificeFlyField } from '../src/engine/inning'
 import { makeRng } from '../src/engine/rng'
 import type { Teams } from '../src/engine/inning'
 import { StubRng, PAD, makeTeam, makeGameState } from './fixtures'
@@ -528,5 +528,61 @@ describe('line score', () => {
     expect(next.lineScore.away.length).toBe(1)
     // The home side has not batted yet, so it has no column at all.
     expect(next.lineScore.home.length).toBe(0)
+  })
+})
+
+describe('out flavour in the play log', () => {
+  it('describes a plain out by how the ball left the bat, not as "is out"', () => {
+    const state = makeGameState({ half: 'top', currentPitch: { pZone: 0.6 } })
+    // zone, in play, batted = out
+    const { result } = applyPitch(state, 'Contact', teams, stub([0.0, 0.0, 0.0]))
+    expect(result.event).toBe('out')
+    expect(result.play).not.toMatch(/is out/)
+    expect(result.play).toMatch(/(grounded|flied|lined|popped) out to /)
+  })
+
+  it('names a fielder on a sacrifice fly', () => {
+    const state = makeGameState({
+      half: 'top',
+      outs: 0,
+      bases: { first: null, second: null, third: 'r3' },
+      currentPitch: { pZone: 0.6 }
+    })
+    // zone, in play, out, (no DP: first base empty), sac-fly roll succeeds
+    const { result } = applyPitch(state, 'Contact', teams, stub([0.0, 0.0, 0.0, 0.0]))
+    expect(result.event).toBe('sacrifice-fly')
+    expect(result.play).toMatch(/flied out to (left|center|right|deep center|deep right)\./)
+    expect(result.play).toMatch(/sacrifice fly/)
+  })
+
+  it('keeps Power in the air and Contact on the ground, on the whole', () => {
+    const count = (swing: 'Contact' | 'Power', re: RegExp) => {
+      let n = 0
+      for (let seed = 0; seed < 200; seed++) if (re.test(outFlavor(swing, seed))) n++
+      return n
+    }
+    expect(count('Power', /flied|lined/)).toBeGreaterThan(count('Contact', /flied|lined/))
+    expect(count('Contact', /grounded/)).toBeGreaterThan(count('Power', /grounded/))
+  })
+
+  it('is a pure function of the seed, so a game replays identically', () => {
+    for (const swing of ['Contact', 'Power'] as const) {
+      expect(outFlavor(swing, 12345)).toBe(outFlavor(swing, 12345))
+    }
+    expect(sacrificeFlyField(7)).toBe(sacrificeFlyField(7))
+  })
+
+  it('produces real text for any seed, including negative and huge ones', () => {
+    for (const seed of [0, -1, -999999, 2147483647, 1e15]) {
+      expect(outFlavor('Contact', seed)).toMatch(/out to /)
+      expect(outFlavor('Power', seed)).toMatch(/out to /)
+      expect(sacrificeFlyField(seed).length).toBeGreaterThan(0)
+    }
+  })
+
+  it('varies across seeds rather than always saying the same thing', () => {
+    const seen = new Set<string>()
+    for (let seed = 0; seed < 40; seed++) seen.add(outFlavor('Contact', seed))
+    expect(seen.size).toBeGreaterThan(4)
   })
 })
