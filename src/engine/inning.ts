@@ -263,6 +263,13 @@ export function applyPitch(state: GameState, choice: Choice, teams: Teams, rng: 
     }
   }
 
+  // GAME_DESIGN.md section 3.4: "When a plate appearance ends for any reason,
+  // the next batter starts at 0-0." The count is per plate appearance, not
+  // per half-inning, so it resets here rather than only in endHalfInning.
+  if (paEnded) {
+    count = { balls: 0, strikes: 0 }
+  }
+
   const battingIdx = battingSide(state.half)
   const battingTeam = teamFor(teams, battingIdx)
 

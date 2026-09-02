@@ -107,6 +107,119 @@ describe('GAME_DESIGN.md section 4.1 scenarios (implemented verbatim)', () => {
     expect(next.homeScore).toBe(5)
     expect(next.awayScore).toBe(3)
   })
+
+  it('Given a count of 1-2 and a batter who strikes out (or walks, or puts the ball in play) / When the plate appearance ends / Then the next batter\'s count is 0-0, and outs, bases and score reflect the play', () => {
+    // Strikes out: 1-2, Take, pitch in the zone -> called strike three.
+    const strikeoutState = makeGameState({
+      outs: 0,
+      count: { balls: 1, strikes: 2 },
+      bases: { first: 'r1', second: null, third: null },
+      currentPitch: { pZone: 0.9 },
+      half: 'top'
+    })
+    const strikeout = applyPitch(strikeoutState, 'Take', teams, stub([0.0]))
+    expect(strikeout.result.event).toBe('strikeout')
+    expect(strikeout.state.count).toEqual({ balls: 0, strikes: 0 })
+    expect(strikeout.state.outs).toBe(1)
+    expect(strikeout.state.bases).toEqual({ first: 'r1', second: null, third: null })
+    expect(strikeout.state.awayScore).toBe(0)
+
+    // Puts the ball in play: 1-2, Contact, zone, in play, single.
+    const inPlayState = makeGameState({
+      outs: 0,
+      count: { balls: 1, strikes: 2 },
+      bases: { first: null, second: null, third: 'r3' },
+      currentPitch: { pZone: 0.6 },
+      half: 'top'
+    })
+    const inPlay = applyPitch(inPlayState, 'Contact', teams, stub([0.0, 0.0, 0.7]))
+    expect(inPlay.result.event).toBe('single')
+    expect(inPlay.state.count).toEqual({ balls: 0, strikes: 0 })
+    expect(inPlay.state.outs).toBe(0)
+    expect(inPlay.state.bases).toEqual({ first: away.batters[0].id, second: null, third: null })
+    expect(inPlay.state.awayScore).toBe(1)
+
+    // Walks: ball four cannot be reached from 1-2 on one pitch, so the walk
+    // arm of this scenario starts at 3-2, the last count from which it can.
+    const walkState = makeGameState({
+      outs: 0,
+      count: { balls: 3, strikes: 2 },
+      bases: { first: 'r1', second: null, third: null },
+      currentPitch: { pZone: 0.1 },
+      half: 'top'
+    })
+    const walk = applyPitch(walkState, 'Take', teams, stub([0.9]))
+    expect(walk.result.event).toBe('walk')
+    expect(walk.state.count).toEqual({ balls: 0, strikes: 0 })
+    expect(walk.state.outs).toBe(0)
+    expect(walk.state.bases).toEqual({ first: away.batters[0].id, second: 'r1', third: null })
+    expect(walk.state.awayScore).toBe(0)
+  })
+
+  it('Given bottom of the 9th, tied, runner on 3rd, 1 out / When the batter singles / Then the game ends immediately as a walk-off; the half-inning does not continue', () => {
+    const state = makeGameState({
+      inning: 9,
+      half: 'bottom',
+      outs: 1,
+      bases: { first: null, second: null, third: 'r3' },
+      homeScore: 3,
+      awayScore: 3,
+      currentPitch: { pZone: 0.6 }
+    })
+    // location=zone(0.0), swing=in play(0.0), batted=single(0.7); no R2/R1 rolls, first and second are empty
+    const { state: next, result } = applyPitch(state, 'Contact', teams, stub([0.0, 0.0, 0.7]))
+
+    expect(result.event).toBe('single')
+    expect(result.runsScored).toEqual(['r3'])
+    expect(result.gameEnded).toBe(true)
+    expect(result.halfInningEnded).toBe(false)
+    expect(next.isOver).toBe(true)
+    expect(next.homeScore).toBe(4)
+    expect(next.awayScore).toBe(3)
+    // The half-inning did not continue: the out count stands where the
+    // walk-off left it rather than being reset by a half-inning transition.
+    expect(next.outs).toBe(1)
+  })
+})
+
+describe('pitch-by-pitch trace: every plate appearance lasts at least three pitches', () => {
+  it('plays one always-Take half-inning and counts the pitches in each plate appearance', () => {
+    // With Take on every pitch, a plate appearance can only end on strike
+    // three or ball four, so three pitches is the hard floor. Before the
+    // count was reset per plate appearance, a batter inheriting the
+    // previous batter's two strikes could be struck out on one pitch.
+    const state = createGame({
+      gameIndex: 0,
+      homeTeam: home,
+      awayTeam: away,
+      homePitcher: home.pitchers[0],
+      awayPitcher: away.pitchers[0],
+      seed: 20260401
+    })
+    const rng = makeRng(20260402)
+
+    let current = state
+    let pitchesInCurrentPa = 0
+    const paLengths: number[] = []
+
+    while (true) {
+      const { state: next, result } = applyPitch(current, 'Take', teams, rng)
+      pitchesInCurrentPa += 1
+      if (result.paEnded) {
+        paLengths.push(pitchesInCurrentPa)
+        pitchesInCurrentPa = 0
+      }
+      current = next
+      if (result.halfInningEnded || result.gameEnded) break
+    }
+
+    // A half-inning always ends on a completed plate appearance (the third out).
+    expect(pitchesInCurrentPa).toBe(0)
+    expect(paLengths.length).toBeGreaterThanOrEqual(3)
+    for (const length of paLengths) {
+      expect(length).toBeGreaterThanOrEqual(3)
+    }
+  })
 })
 
 describe('walk forcing', () => {
