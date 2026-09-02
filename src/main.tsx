@@ -1,8 +1,6 @@
 import { render } from 'preact';
-
-function App() {
-  return <h1>Baseball</h1>;
-}
+import './ui/theme.css';
+import { App } from './ui/App';
 
 const app = document.getElementById('app');
 if (app) {

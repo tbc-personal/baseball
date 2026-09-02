@@ -1,0 +1,79 @@
+/**
+ * Design tokens for the "Scorecard" visual system (docs/mockups/Main.dc.html,
+ * docs/mockups/README.md). Every screen (T7, T8) imports this once; nothing
+ * else defines these colors, fonts, or the ruled-paper background.
+ *
+ * Plain CSS custom properties -- no Tailwind, no component library, per
+ * PLAN.md's hard constraint.
+ */
+
+:root {
+  /* Colors */
+  --sc-paper: #f4eee0;
+  --sc-ink: #23292d;
+  --sc-pencil-red: #b5402c;
+  --sc-pencil-red-hover: #8f3222;
+  --sc-muted-ink: #6b6f6a;
+  --sc-faint-rule: #cdc4ad;
+  --sc-card-bg: rgba(255, 255, 255, 0.35);
+
+  /* Fonts */
+  --sc-font-display: 'Oswald', 'Arial Narrow', sans-serif;
+  --sc-font-body: 'Courier Prime', 'Courier New', monospace;
+
+  /* Ruled-paper background: 28px repeat, a 1px ink rule at 5% opacity */
+  --sc-ruled-paper: repeating-linear-gradient(
+    0deg,
+    transparent 0px,
+    transparent 27px,
+    rgba(35, 41, 45, 0.05) 27px,
+    rgba(35, 41, 45, 0.05) 28px
+  );
+
+  /* Layout: the whole app is a 390px column, centred on wider screens */
+  --sc-column-width: 390px;
+
+  /* Tap targets (PLAN.md hard constraint) */
+  --sc-tap-target-min: 44px;
+
+  /* Buttons, per docs/mockups/README.md's visual-system table */
+  --sc-button-primary-height: 62px;
+  --sc-button-choice-height: 60px;
+  --sc-button-bunt-height: 48px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--sc-paper);
+  color: var(--sc-ink);
+  font-family: var(--sc-font-body);
+}
+
+.sc-app {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  background: var(--sc-paper);
+}
+
+.sc-screen {
+  width: 100%;
+  max-width: var(--sc-column-width);
+  min-height: 100vh;
+  box-sizing: border-box;
+  padding: 24px 20px 20px 20px;
+  background-color: var(--sc-paper);
+  background-image: var(--sc-ruled-paper);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
