@@ -3,9 +3,9 @@
  * <pitcher>" with the bucket in red Oswald, plus the tendency and pitch
  * count on the right (three filled bars, one per pitch shown -- the mockup
  * draws exactly 3, so this caps the bar row at 3 regardless of the real
- * count. See T7 report for the "pitch count" ambiguity: GameState has no
- * cumulative per-pitcher pitch counter, so `pitchLabel` is supplied by the
- * caller as an honestly-derivable approximation, not fabricated data).
+ * count). `pitchLabel` carries the pitcher's tendency, his pitch count for
+ * the game and the count for this plate appearance; it is built by
+ * format.ts's pitcherWorkload, so this component stays presentational.
  */
 
 import type { ReadBucket, Tendency } from '../engine/types'

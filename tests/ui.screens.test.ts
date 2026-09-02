@@ -13,7 +13,8 @@ import {
   previewSummary,
   describeHalfInning,
   milestoneLine,
-  gameResultLine
+  gameResultLine,
+  pitchCountLabel
 } from '../src/ui/format'
 import { sortBatting, type BattingRow } from '../src/ui/SeasonScreen'
 import type { BatterStats } from '../src/engine/types'
@@ -244,5 +245,18 @@ describe('gameResultLine', () => {
 
   it('uses an en dash, matching the scoreboard elsewhere', () => {
     expect(gameResultLine({ homeShort: 'Herons', awayShort: 'Wrens', homeScore: 5, awayScore: 4 })).toContain('–')
+  })
+})
+
+describe('pitchCountLabel', () => {
+  it('shows the game total and the at-bat total, without repeating the tendency', () => {
+    expect(pitchCountLabel(61, 5)).toBe('61 P · 5 this at-bat')
+    // PitcherRead renders "{tendency} · {pitchLabel}", so a tendency here
+    // would print twice.
+    expect(pitchCountLabel(61, 5)).not.toMatch(/Neutral|Attacker|Nibbler/)
+  })
+
+  it('handles the first pitch of a game', () => {
+    expect(pitchCountLabel(0, 0)).toBe('0 P · 0 this at-bat')
   })
 })

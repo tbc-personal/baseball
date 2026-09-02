@@ -21,6 +21,14 @@ import { INNINGS_PER_GAME, OUTS_PER_HALF_INNING, BALLS_FOR_WALK, STRIKES_FOR_STR
 
 const EMPTY_BASES: Bases = { first: null, second: null, third: null }
 
+/**
+ * This game's pitch counts, reading a game saved before the counters
+ * existed as zeroes rather than undefined. See GameState.pitchCounts.
+ */
+export function pitchCountsOf(state: GameState): { home: number; away: number; thisAtBat: number } {
+  return state.pitchCounts ?? { home: 0, away: 0, thisAtBat: 0 }
+}
+
 export interface Teams {
   home: Team
   away: Team
@@ -273,6 +281,16 @@ export function applyPitch(state: GameState, choice: Choice, teams: Teams, rng: 
   const battingIdx = battingSide(state.half)
   const battingTeam = teamFor(teams, battingIdx)
 
+  // Every pitch counts against the pitcher who threw it, and against the
+  // plate appearance until that appearance ends.
+  const pitchingIdx = pitchingSide(state.half)
+  const priorCounts = pitchCountsOf(state)
+  const pitchCounts = {
+    ...priorCounts,
+    [pitchingIdx]: priorCounts[pitchingIdx] + 1,
+    thisAtBat: paEnded ? 0 : priorCounts.thisAtBat + 1
+  }
+
   let play: string | null = null
   if (paEnded && event !== null) {
     play = describePlay(batter, event, state.count, runsScored, battingTeam)
@@ -315,6 +333,7 @@ export function applyPitch(state: GameState, choice: Choice, teams: Teams, rng: 
     homeScore,
     awayScore,
     hits,
+    pitchCounts,
     lineScore,
     currentBatterIndex,
     plays,
@@ -458,6 +477,7 @@ export function createGame(args: CreateGameArgs): GameState {
     awayScore: 0,
     lineScore: { home: [], away: [] },
     hits: { home: 0, away: 0 },
+    pitchCounts: { home: 0, away: 0, thisAtBat: 0 },
     currentBatterIndex: { home: 0, away: 0 },
     rngState: rng.state(),
     plays: [],

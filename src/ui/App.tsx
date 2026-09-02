@@ -15,7 +15,7 @@
 import { useState } from 'preact/hooks'
 import type { Choice, GameState } from '../engine/types'
 import type { Teams } from '../engine/inning'
-import { applyPitch, createGame } from '../engine/inning'
+import { applyPitch, createGame, pitchCountsOf } from '../engine/inning'
 import type { HalfInningRecap, PlayLogEntry } from '../engine/sim'
 import { simulateHalfInningWithRecap, isHitEvent } from '../engine/sim'
 import { makeRng } from '../engine/rng'
@@ -52,7 +52,7 @@ import { HomeScreen } from './HomeScreen'
 import { BetweenScreen } from './BetweenScreen'
 import { SeasonScreen } from './SeasonScreen'
 import { SettingsScreen, type DecodeOutcome } from './SettingsScreen'
-import { describeHalfInning, gameResultLine, halfInningLabel, ordinal, primaryAction, resumeSentence, surname } from './format'
+import { describeHalfInning, gameResultLine, halfInningLabel, ordinal, pitchCountLabel, primaryAction, resumeSentence, surname } from './format'
 
 const storage = getBrowserStorage() ?? createMemoryStorage()
 const TOTAL_GAMES = 20
@@ -414,7 +414,7 @@ export function App() {
         pitcherName={pitcher.name}
         bucket={game.currentPitch.displayedBucket}
         tendency={pitcher.tendency}
-        pitchLabel={`${game.count.balls + game.count.strikes} this at-bat`}
+        pitchLabel={pitchCountLabel(pitchCountsOf(game)[pitchingSide], pitchCountsOf(game).thisAtBat)}
         recommended={recommendedChoice(game.currentPitch.displayedBucket)}
         buntAvailable={isBuntAvailable(game.bases, game.outs, game.count)}
         lastPlay={yourPlays.length > 0 ? yourPlays[yourPlays.length - 1].text : null}
