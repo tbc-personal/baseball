@@ -1,4 +1,4 @@
-# Short Season
+hi# Short Season
 
 A small turn-based baseball game, built to be played in the gaps between
 meetings. One break is one half-inning. You bat for a fictional team through
@@ -8,25 +8,6 @@ so you never wait. There are no timers and no reflexes, and the game saves
 after every pitch, so closing the tab in a 3-2 count costs nothing.
 
 **Play at:** https://tbc-personal.github.io/baseball/
-
-## One-time setup, by the repo owner
-
-The deploy workflow builds and uploads the site, but it cannot switch Pages
-on. Until both steps below are done, pushes to `main` will build and then
-fail at the deploy step.
-
-1. **Make the repository public.** GitHub Pages is free for public
-   repositories on every plan; for a private repository it needs GitHub Pro
-   or Team. There is nothing sensitive in this repo — no backend, no
-   secrets, no personal data, fictional rosters. See `docs/PLAN.md` §1 for
-   the reasoning and for the Cloudflare Pages fallback if you would rather
-   keep it private.
-2. **Settings → Pages → Source → "GitHub Actions".** Not "Deploy from a
-   branch" — this project publishes a built `dist/` from a workflow, so the
-   branch option will not work.
-
-After that, every push to `main` deploys, and the workflow can also be run
-by hand from the Actions tab.
 
 ## Running it locally
 
