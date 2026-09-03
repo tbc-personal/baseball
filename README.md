@@ -1,4 +1,4 @@
-hi# Short Season
+# Short Season
 
 A small turn-based baseball game, built to be played in the gaps between
 meetings. One break is one half-inning. You bat for a fictional team through
