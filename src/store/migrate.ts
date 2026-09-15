@@ -31,10 +31,23 @@ export class SchemaTooNewError extends Error {
  * so the migration mechanism is exercised (6.1's "v: 0 is migrated" test)
  * and so the next real migration has a rung of the ladder to copy.
  */
-function migrateV0toV1(state: unknown): AppState {
+function migrateV0toV1(state: unknown): unknown {
   const record = (typeof state === 'object' && state !== null ? state : {}) as Record<string, unknown>
   const teamName = typeof record.teamName === 'string' ? record.teamName : DEFAULT_TEAM_NAME
-  return { ...record, teamName } as AppState
+  return { ...record, teamName }
+}
+
+/**
+ * v1 -> v2: `currentHalfPlays`/`currentHalfHits` (the in-progress
+ * half-inning's play log) were added in schema v2. A v1 save predates
+ * them -- there is no way to recover plays that were never persisted, so
+ * this defaults to "no half in progress", same as a fresh game.
+ */
+function migrateV1toV2(state: unknown): AppState {
+  const record = (typeof state === 'object' && state !== null ? state : {}) as Record<string, unknown>
+  const currentHalfPlays = Array.isArray(record.currentHalfPlays) ? record.currentHalfPlays : []
+  const currentHalfHits = typeof record.currentHalfHits === 'number' ? record.currentHalfHits : 0
+  return { ...record, currentHalfPlays, currentHalfHits } as AppState
 }
 
 export function migrate(envelope: AnyVersionEnvelope): SaveEnvelope {
@@ -51,8 +64,14 @@ export function migrate(envelope: AnyVersionEnvelope): SaveEnvelope {
       v = 1
       continue
     }
-    // Unreachable today (only v0 -> v1 exists), but fail loudly instead of
-    // silently returning a mid-migration state if that ever changes.
+    if (v === 1) {
+      state = migrateV1toV2(state)
+      v = 2
+      continue
+    }
+    // Unreachable today (only v0 -> v1 -> v2 exist), but fail loudly
+    // instead of silently returning a mid-migration state if that ever
+    // changes.
     throw new Error(`No migration path from save schema v${v}`)
   }
 

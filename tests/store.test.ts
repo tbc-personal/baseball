@@ -52,17 +52,33 @@ function midGameFixture(seed = 2): AppState {
   for (let i = 0; i < 6 && !game.isOver; i++) {
     game = applyPitch(game, 'Contact', teams, rng).state
   }
-  return { teamName: 'Harbor Herons', season, currentGame: game }
+  return { teamName: 'Harbor Herons', season, currentGame: game, currentHalfPlays: [], currentHalfHits: 0 }
 }
 
 /** An end-of-season AppState: every game played, no game in progress. */
 function endOfSeasonFixture(seed = 3): AppState {
-  return { teamName: 'Harbor Herons', season: simulateSeason(seed), currentGame: null }
+  return { teamName: 'Harbor Herons', season: simulateSeason(seed), currentGame: null, currentHalfPlays: [], currentHalfHits: 0 }
+}
+
+/**
+ * A mid-game AppState paused partway through a Herons half-inning, with
+ * one out and one play already recorded -- the shape that reproduces the
+ * "first out missing from the recap after a pause" bug when
+ * currentHalfPlays/currentHalfHits are not part of what gets persisted.
+ */
+function midHalfInningFixture(seed = 4): AppState {
+  const base = midGameFixture(seed)
+  return {
+    ...base,
+    currentHalfPlays: [{ text: 'Someone popped out to second.', outsAfter: 1, runsScored: 0 }],
+    currentHalfHits: 0
+  }
 }
 
 const FIXTURES: Array<[string, () => AppState]> = [
   ['a fresh season', () => freshFixture()],
   ['a mid-game season', () => midGameFixture()],
+  ['a mid-half-inning pause', () => midHalfInningFixture()],
   ['an end-of-season season', () => endOfSeasonFixture()]
 ]
 
@@ -180,6 +196,22 @@ describe('migrate (GAME_DESIGN.md 6.1)', () => {
     expect(migrated.state.currentGame).toBeNull()
   })
 
+  it('migrates a v: 1 envelope, defaulting the new half-inning fields to empty', () => {
+    const season = createSeason(4)
+    const v1: AnyVersionEnvelope = {
+      v: 1,
+      savedAt: '2025-06-01T00:00:00.000Z',
+      device: 'Old Phone',
+      // v1 predates currentHalfPlays/currentHalfHits.
+      state: { teamName: 'Harbor Herons', season, currentGame: null }
+    }
+
+    const migrated = migrate(v1)
+    expect(migrated.v).toBe(SAVE_SCHEMA_VERSION)
+    expect(migrated.state.currentHalfPlays).toEqual([])
+    expect(migrated.state.currentHalfHits).toBe(0)
+  })
+
   // 6.1: v: 99 is refused with the "newer version" message
   it('refuses a version newer than the current one', () => {
     const tooNew: AnyVersionEnvelope = {
@@ -267,6 +299,16 @@ describe('load() resilience (T6 acceptance criterion)', () => {
     const state = midGameFixture()
     save(storage, state, 'Test Device')
     expect(load(storage, 999)).toEqual(state)
+  })
+
+  it('round-trips a save paused mid-half-inning, keeping the plays recorded before the pause', () => {
+    const storage = createMemoryStorage()
+    const state = midHalfInningFixture()
+    save(storage, state, 'Test Device')
+    const loaded = load(storage, 999)
+    expect(loaded).toEqual(state)
+    expect(loaded.currentHalfPlays).toHaveLength(1)
+    expect(loaded.currentHalfPlays[0].outsAfter).toBe(1)
   })
 })
 

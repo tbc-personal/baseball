@@ -17,7 +17,7 @@ export const UNDO_KEY = 'shortSeason:save:undo'
 
 /** A brand-new season: no game in progress, default team name. */
 export function freshAppState(seed: number, teamName: string = DEFAULT_TEAM_NAME): AppState {
-  return { teamName, season: createSeason(seed), currentGame: null }
+  return { teamName, season: createSeason(seed), currentGame: null, currentHalfPlays: [], currentHalfHits: 0 }
 }
 
 /** Parse+validate+migrate a raw localStorage string. null on any failure (never throws). */
