@@ -415,10 +415,18 @@ function applyResultToRecord(record: TeamRecord, won: boolean, runsFor: number, 
  * Record a completed Herons game into the season: updates standings for
  * both sides, appends the season-log entry, marks the schedule slot
  * played, and simulates the other five opponents' games for that same
- * slot (paired off two at a time, weakest-to-strongest order minus
- * whoever the Herons just played; with five teams left, one sits out each
- * slot) so the standings table stays full. `gameState.isOver` must be
- * true, and `gameState.gameIndex` must match an unplayed schedule slot.
+ * slot (paired off two at a time, minus whoever the Herons just played;
+ * with five teams left, one sits out each slot) so the standings table
+ * stays full. `gameState.isOver` must be true, and `gameState.gameIndex`
+ * must match an unplayed schedule slot.
+ *
+ * The bye rotates by gameIndex rather than always falling on the last
+ * team in OPPONENTS's fixed weakest-to-strongest order -- otherwise the
+ * strongest team (last in that order, scheduled latest by the front-load
+ * bias) sat out every slot before its own Herons matchup and could reach
+ * the season with zero games played anywhere in the standings. Deriving
+ * the rotation from gameIndex, rather than rolling it, keeps this
+ * function's only randomness the win/score rolls below.
  */
 export function recordGameResult(season: SeasonState, gameState: GameState): SeasonState {
   const scheduled = season.schedule[gameState.gameIndex]
@@ -453,9 +461,11 @@ export function recordGameResult(season: SeasonState, gameState: GameState): Sea
 
   const heronsOpponentId = scheduled.homeTeamId === HERONS_TEAM_ID ? scheduled.awayTeamId : scheduled.homeTeamId
   const others = OPPONENTS.filter((t) => t.id !== heronsOpponentId)
-  for (let i = 0; i + 1 < others.length; i += 2) {
-    const teamA = others[i]
-    const teamB = others[i + 1]
+  const bye = gameState.gameIndex % others.length
+  const rotated = [...others.slice(bye), ...others.slice(0, bye)]
+  for (let i = 0; i + 1 < rotated.length; i += 2) {
+    const teamA = rotated[i]
+    const teamB = rotated[i + 1]
     const aIsHome = rngBool(rng, SIM_OTHER_GAME_HOME_PROBABILITY)
     const home = aIsHome ? teamA : teamB
     const away = aIsHome ? teamB : teamA
