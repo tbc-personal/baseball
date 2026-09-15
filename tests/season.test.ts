@@ -374,6 +374,32 @@ describe('recordGameResult', () => {
     const line = formatLogEntry(next.log[0])
     expect(line).toMatch(/^G7 vs \w+ W \d+-\d+$/)
   })
+
+  it('rotates the other-teams bye instead of always sitting out the same team', () => {
+    // Five straight slots against the Wrens, so the other five opponents
+    // (including the Ospreys, last in OPPONENTS's weakest-to-strongest
+    // order) are the ones being paired off and byed each time. Before the
+    // gameIndex-based rotation, whichever team landed last in that fixed
+    // array sat out every single one of these -- reproducible as the
+    // Ospreys reaching six real games with zero games played anywhere.
+    let season = createSeason(9)
+    season = {
+      ...season,
+      schedule: season.schedule.map((g, i) =>
+        i < 5 ? { ...g, homeTeamId: HERONS_TEAM_ID, awayTeamId: 'wrens' } : g
+      )
+    }
+    for (let g = 0; g < 5; g++) {
+      const gameState = fakeFinishedGame(g, HERONS_TEAM_ID, 'wrens', 5, 3)
+      season = recordGameResult(season, gameState)
+    }
+
+    const others = OPPONENTS.filter((t) => t.id !== 'wrens')
+    for (const team of others) {
+      const record = season.standings.find((r) => r.teamId === team.id)!
+      expect(record.wins + record.losses).toBeGreaterThan(0)
+    }
+  })
 })
 
 describe('checkMilestones', () => {

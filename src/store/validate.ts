@@ -57,6 +57,8 @@ export function isAppState(x: unknown): x is AppState {
     isRecord(x) &&
     typeof x.teamName === 'string' &&
     isSeasonStateLike(x.season) &&
-    (x.currentGame === null || isGameStateLike(x.currentGame))
+    (x.currentGame === null || isGameStateLike(x.currentGame)) &&
+    Array.isArray(x.currentHalfPlays) &&
+    typeof x.currentHalfHits === 'number'
   )
 }

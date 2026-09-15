@@ -3,6 +3,7 @@
  */
 
 import type { GameState, SeasonState } from '../engine/types'
+import type { PlayLogEntry } from '../engine/sim'
 
 /**
  * The whole persisted app state: everything that needs to survive a
@@ -21,13 +22,25 @@ export interface AppState {
   teamName: string
   season: SeasonState
   currentGame: GameState | null
+  /**
+   * The play-by-play log and hit count for the Herons half-inning
+   * `currentGame` is in the middle of -- empty/0 whenever there is no
+   * game in progress or the batting team's half just started. This is
+   * presentation data for the between-innings recap, not engine state,
+   * but it still has to survive a save/reload: without it, pausing
+   * mid-half-inning and coming back would silently drop whichever plays
+   * already happened from that half's recap once it finishes, even
+   * though the game itself (outs, bases, batting order) resumed correctly.
+   */
+  currentHalfPlays: PlayLogEntry[]
+  currentHalfHits: number
 }
 
 /**
  * The save-schema version this build understands. Bump when AppState's
  * shape changes in a way `migrate()` needs to account for.
  */
-export const SAVE_SCHEMA_VERSION = 1
+export const SAVE_SCHEMA_VERSION = 2
 
 /**
  * The envelope wrapping every save, whether it lives in localStorage or is

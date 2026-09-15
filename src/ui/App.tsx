@@ -16,7 +16,7 @@ import { useState } from 'preact/hooks'
 import type { Choice, GameState } from '../engine/types'
 import type { Teams } from '../engine/inning'
 import { applyPitch, createGame, strikeoutsOf, pitchCountsOf } from '../engine/inning'
-import type { HalfInningRecap, PlayLogEntry } from '../engine/sim'
+import type { HalfInningRecap } from '../engine/sim'
 import { simulateHalfInningWithRecap, isHitEvent } from '../engine/sim'
 import { makeRng } from '../engine/rng'
 import { recommendedChoice } from '../engine/recommend'
@@ -130,7 +130,6 @@ export function App() {
   )
   const [screen, setScreen] = useState<Screen>('home')
   const [between, setBetween] = useState<BetweenData | null>(null)
-  const [yourPlays, setYourPlays] = useState<PlayLogEntry[]>([])
   /**
    * What the most recent pitch did, for the at-bat screen's pitch line.
    * Cleared wherever the play log is, so a new half-inning or a resumed
@@ -145,7 +144,6 @@ export function App() {
    * sitting above "Okafor strikes out on a 2-2 pitch".
    */
   const [lastPlayText, setLastPlayText] = useState<string | null>(null)
-  const [yourHits, setYourHits] = useState(0)
   const [pendingImport, setPendingImport] = useState<SaveEnvelope | null>(null)
   const [canUndo, setCanUndo] = useState(false)
 
@@ -183,11 +181,17 @@ export function App() {
     if (next.currentGame === null) return
 
     // The opponent bats first when the Herons are at home; play those out
-    // before handing control over.
+    // before handing control over. If the Herons were already batting
+    // (resuming mid-half-inning after a pause), this is a no-op and
+    // currentHalfPlays/currentHalfHits must be left alone -- they hold
+    // the plays already recorded for the half in progress.
+    const wasHeronsBatting = battingSideOf(next.currentGame) === heronsSideOf(next.currentGame)
     const { state, recap } = runOpponentHalves(next.currentGame)
-    next = { ...next, currentGame: state }
-    setYourPlays([])
-    setYourHits(0)
+    next = {
+      ...next,
+      currentGame: state,
+      ...(wasHeronsBatting ? {} : { currentHalfPlays: [], currentHalfHits: 0 })
+    }
     setLastPitch(null)
     setLastPlayText(null)
     persist(next)
@@ -248,16 +252,14 @@ export function App() {
 
     const plays =
       playText !== null
-        ? [...yourPlays, { text: playText, outsAfter: outsBefore + result.outsAdded, runsScored: result.runsScored.length }]
-        : yourPlays
-    setYourPlays(plays)
-    const hits = yourHits + (isHitEvent(result.event) ? 1 : 0)
-    setYourHits(hits)
+        ? [...appState.currentHalfPlays, { text: playText, outsAfter: outsBefore + result.outsAdded, runsScored: result.runsScored.length }]
+        : appState.currentHalfPlays
+    const hits = appState.currentHalfHits + (isHitEvent(result.event) ? 1 : 0)
 
     let nextGame = afterPitch
 
     if (!result.halfInningEnded && !result.gameEnded) {
-      persist({ ...appState, season, currentGame: nextGame })
+      persist({ ...appState, season, currentGame: nextGame, currentHalfPlays: plays, currentHalfHits: hits })
       return
     }
 
@@ -287,10 +289,14 @@ export function App() {
       milestones = checked.fired
     }
 
-    const next: AppState = { ...appState, season, currentGame: nextGame.isOver ? null : nextGame }
+    const next: AppState = {
+      ...appState,
+      season,
+      currentGame: nextGame.isOver ? null : nextGame,
+      currentHalfPlays: [],
+      currentHalfHits: 0
+    }
     persist(next)
-    setYourPlays([])
-    setYourHits(0)
     setLastPitch(null)
     setLastPlayText(null)
     setBetween({
@@ -370,7 +376,6 @@ export function App() {
           const fresh = freshAppState(Math.floor(Math.random() * 0xffffffff), appState.teamName)
           persist(fresh)
           setBetween(null)
-          setYourPlays([])
           setLastPitch(null)
           setLastPlayText(null)
           setScreen('home')
