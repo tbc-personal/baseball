@@ -102,8 +102,8 @@ that ignores the read ignores the only thing Eye touched.
 The rule: a swing at a pitch **out of the zone** is held up, and counts as
 a ball, with probability `clamp(0.10 + adj(Eye) * 0.50, 0, 1)`, scaled by
 `CHECK_SWING_TWO_STRIKE_FACTOR` (committed at 1). Eye is now worth
-**+0.049**, close enough to the other two that the rating spread is no
-longer the game's largest balance problem.
+**+0.048** against Contact's +0.112 and Power's +0.093 — close enough
+that the rating spread is no longer the game's largest balance problem.
 
 Two things about it are worth recording because they were not obvious:
 

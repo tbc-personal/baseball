@@ -127,7 +127,8 @@ export const PITCH_OUTCOMES: Record<string, [number, number, number]> = {
  * or Power was worth (+0.013 of run value against +0.092 and +0.095), and
  * under an always-Contact policy it was worth exactly zero, because a
  * policy that ignores the read ignores the rating. With the rule Eye is
- * worth +0.049, which is the closest the three ratings have been.
+ * worth +0.048, against Contact's +0.112 and Power's +0.093 -- the
+ * closest the three ratings have been.
  *
  * A check swing acts on swings rather than takes, which is why it was
  * preferred to the obvious alternative of shading borderline called

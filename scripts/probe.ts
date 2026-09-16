@@ -238,7 +238,12 @@ function playPlateAppearance(
     if (kind === 'called-strike' || kind === 'whiff') {
       count.strikes += 1
       if (count.strikes >= STRIKES_FOR_STRIKEOUT) return { event: 'strikeout', pitches }
-    } else if (kind === 'ball') {
+    } else if (kind === 'ball' || kind === 'check-swing') {
+      // A checked swing (3.4a) is a ball for everything the count cares
+      // about. It has its own kind only so the play line can describe it,
+      // and it must be folded in here rather than falling through to the
+      // bunt branch below -- scoring it as an out makes the Eye rating
+      // measure as actively harmful, which is how this was found.
       count.balls += 1
       if (count.balls >= BALLS_FOR_WALK) return { event: 'walk', pitches }
     } else if (kind === 'foul') {
@@ -246,6 +251,9 @@ function playPlateAppearance(
     } else if (kind === 'in-play') {
       return { event: resolution.result.batted as Ev, pitches }
     } else {
+      // Bunt. No policy here bunts (there are no bases), but a bunt that
+      // is not a foul ends the plate appearance, so treat it as an out
+      // rather than looping forever.
       return { event: 'out', pitches }
     }
   }

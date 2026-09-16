@@ -413,8 +413,11 @@ about 2×:
 | Rating, 20 → 80 | Before | After |
 |---|---|---|
 | Contact | +0.087 | +0.112 |
-| Power | +0.091 | +0.090 |
-| Eye | **+0.013** | **+0.049** |
+| Power | +0.091 | +0.093 |
+| Eye | **+0.013** | **+0.048** |
+
+Measured on the committed engine with `npm run probe ratings`, 60,000 PA
+per row, reading policy.
 
 And the §0.4 inversion is gone: the Contact rating is now monotonic in
 batting average (.223 / .254 / .284 across 20 / 50 / 80) instead of
