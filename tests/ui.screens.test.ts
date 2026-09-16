@@ -129,6 +129,20 @@ describe('sortBatting', () => {
     sortBatting(rows, 'hr')
     expect(rows.map((r) => r.batterId)).toEqual(before)
   })
+
+  it('sorts by RBI descending, putting the run producer above the batter with fewer', () => {
+    // a has 11 RBI, b has 4, c has 3.
+    expect(sortBatting(rows, 'rbi').map((r) => r.batterId)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('sorts by SLG descending, putting the slugger above a singles hitter', () => {
+    // a: 5 HR in 5 hits over 24 AB is all extra bases -- (0 + 0 + 0 + 20) /
+    // 24 = .833 SLG. b: 8 singles over 24 AB is .333 SLG, the same as its
+    // batting average, since a single hitter has no HR/2B/3B to pad slugging
+    // above average. a's SLG clears b's by a wide margin despite b's higher
+    // batting average (see the 'avg' test above).
+    expect(sortBatting(rows, 'slg').map((r) => r.batterId)).toEqual(['a', 'c', 'b'])
+  })
 })
 
 describe('save-code presentation (Transfer.dc.html)', () => {

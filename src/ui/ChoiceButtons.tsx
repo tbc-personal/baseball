@@ -3,11 +3,24 @@
  * grid of 60px buttons with 2px ink borders; the recommended choice is
  * filled ink. Below it the bunt button, 48px, dashed border, shown only
  * when isBuntAvailable is true.
+ *
+ * Each button also carries the key that presses it, rendered only on a
+ * device with a real pointer -- see `.sc-key-hint` in theme.css. The keys
+ * themselves are bound in AtBatScreen, next to where onChoose is wired, so
+ * the hint and the binding cannot drift apart.
  */
 
 import type { Choice } from '../engine/types'
 
 const CHOICES: Array<Exclude<Choice, 'Bunt'>> = ['Take', 'Contact', 'Power']
+
+/** The key that presses each button. AtBatScreen binds these. */
+export const CHOICE_KEYS: Record<Choice, string> = {
+  Take: 'T',
+  Contact: 'C',
+  Power: 'P',
+  Bunt: 'B'
+}
 
 export interface ChoiceButtonsProps {
   recommended: Choice
@@ -40,6 +53,7 @@ export function ChoiceButtons({ recommended, buntAvailable, onChoose, disabled }
             <button
               key={choice}
               type="button"
+              className="sc-key-host"
               disabled={disabled}
               onClick={() => onChoose(choice)}
               style={{
@@ -49,6 +63,7 @@ export function ChoiceButtons({ recommended, buntAvailable, onChoose, disabled }
               }}
             >
               {choice}
+              <span className="sc-key-hint">{CHOICE_KEYS[choice]}</span>
             </button>
           )
         })}
@@ -56,6 +71,7 @@ export function ChoiceButtons({ recommended, buntAvailable, onChoose, disabled }
       {buntAvailable && (
         <button
           type="button"
+          className="sc-key-host"
           disabled={disabled}
           onClick={() => onChoose('Bunt')}
           style={{
@@ -75,6 +91,7 @@ export function ChoiceButtons({ recommended, buntAvailable, onChoose, disabled }
           }}
         >
           Bunt &middot; runners on
+          <span className="sc-key-hint">{CHOICE_KEYS.Bunt}</span>
         </button>
       )}
     </div>

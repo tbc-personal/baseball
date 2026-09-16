@@ -77,3 +77,44 @@ button {
   font-family: inherit;
   cursor: pointer;
 }
+
+/*
+ * Keyboard hints.
+ *
+ * Shown only where there is a real pointer and hover -- a laptop, which is
+ * where this game is mostly played between meetings. On a touch screen
+ * there is no keyboard to hint at and the glyph would be clutter on a
+ * 390px-wide column, so it is not rendered there at all.
+ */
+.sc-key-hint {
+  display: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sc-key-hint {
+    /*
+     * Pinned to the corner rather than set inline after the label: inline,
+     * the hint is centred together with the label, which pushes the label
+     * off-centre and clips the glyph against the edge of a fixed-width
+     * button. Absolute positioning keeps the button face exactly as the
+     * mockup draws it and lets the hint sit out of the way.
+     */
+    display: block;
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    font-family: var(--sc-font-display);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    line-height: 1;
+    opacity: 0.5;
+    pointer-events: none;
+  }
+}
+
+/* The positioning context for .sc-key-hint. Harmless when the hint is not
+   rendered, so it is not inside the media query. */
+.sc-key-host {
+  position: relative;
+}

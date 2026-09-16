@@ -8,6 +8,7 @@
 
 import type { PlayLogEntry } from '../engine/sim'
 import { halfInningSummary, milestoneLine, playGutter } from './format'
+import { useKeyBindings } from './useKeyBindings'
 
 export interface BetweenScreenProps {
   /**
@@ -62,6 +63,11 @@ export interface BetweenScreenProps {
 const INNING_COLUMNS = 9
 
 export function BetweenScreen(props: BetweenScreenProps) {
+  // One primary action: on to the next half-inning. The half-inning is the
+  // game's natural stopping point, so this is the key a player holding a
+  // coffee presses most.
+  useKeyBindings({ Enter: props.onNext })
+
   const ls = props.lineScore
   const gridTemplate = `62px repeat(${INNING_COLUMNS}, minmax(0, 1fr)) 26px 26px 26px`
 
@@ -251,6 +257,7 @@ export function BetweenScreen(props: BetweenScreenProps) {
       <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
         <button
           onClick={props.onNext}
+          className="sc-key-host"
           style={{
             height: '60px',
             background: 'var(--sc-pencil-red)',
@@ -264,6 +271,7 @@ export function BetweenScreen(props: BetweenScreenProps) {
           }}
         >
           {props.nextLabel}
+          <span className="sc-key-hint">&crarr;</span>
         </button>
         <button
           onClick={props.onDone}

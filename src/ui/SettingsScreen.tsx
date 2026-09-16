@@ -10,6 +10,7 @@
 import { useState } from 'preact/hooks'
 import type { SavePreview } from '../store/types'
 import { formatCharacterCount, previewSummary, relativeTime, saveCodeExcerpt } from './format'
+import { useKeyBindings } from './useKeyBindings'
 
 /** What the settings screen needs back from a paste: a preview, or why not. */
 export type DecodeOutcome =
@@ -37,6 +38,12 @@ const SECTION_HEADING: preact.JSX.CSSProperties = {
 }
 
 export function SettingsScreen(props: SettingsScreenProps) {
+  // Escape only. This screen has a team-name field and two save-code boxes,
+  // and `useKeyBindings` already refuses to fire while one of those has
+  // focus -- but binding Enter here would still be wrong, because Enter in
+  // a form means "submit the thing I am typing", not "leave the screen".
+  useKeyBindings({ Escape: props.onBack })
+
   const [exported, setExported] = useState<{ code: string; copied: boolean } | null>(null)
   const [pasted, setPasted] = useState('')
   const [decoded, setDecoded] = useState<DecodeOutcome | null>(null)

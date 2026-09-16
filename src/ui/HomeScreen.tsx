@@ -7,6 +7,7 @@
 
 import type { StandingsRow } from '../engine/season'
 import { formatGamesBack, type PrimaryAction } from './format'
+import { useKeyBindings } from './useKeyBindings'
 
 export interface HomeScreenProps {
   teamName: string
@@ -47,6 +48,9 @@ const LABEL: preact.JSX.CSSProperties = {
 
 export function HomeScreen(props: HomeScreenProps) {
   const { inProgress } = props
+  // This screen always shows exactly one primary action, so Enter is
+  // unambiguous: it is whatever that button currently says.
+  useKeyBindings({ Enter: props.onPrimary })
   return (
     <div className="sc-screen" style={{ paddingTop: '36px', gap: '22px' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -111,6 +115,7 @@ export function HomeScreen(props: HomeScreenProps) {
 
       <button
         onClick={props.onPrimary}
+        className="sc-key-host"
         disabled={props.action.kind === 'season-over'}
         style={{
           height: '64px',
@@ -129,6 +134,7 @@ export function HomeScreen(props: HomeScreenProps) {
         }}
       >
         {props.action.label}
+        {props.action.kind !== 'season-over' && <span className="sc-key-hint">&crarr;</span>}
       </button>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>

@@ -13,6 +13,7 @@ import { DiamondAndCount } from './DiamondAndCount'
 import { BatterCard } from './BatterCard'
 import { PitcherRead } from './PitcherRead'
 import { ChoiceButtons } from './ChoiceButtons'
+import { useKeyBindings } from './useKeyBindings'
 import { LastPlay } from './LastPlay'
 import { halfInningLabel, battingOrderLabel, seasonLine } from './format'
 
@@ -48,6 +49,30 @@ export interface AtBatScreenProps {
 }
 
 export function AtBatScreen(props: AtBatScreenProps) {
+  // Keyboard play. Letters match the button faces (and the hints rendered
+  // on them); the digits are the same three in the order they sit on
+  // screen, for a hand that stays on the number row. Enter takes the
+  // recommended choice, which is the one already drawn as filled ink.
+  //
+  // Bunt is bound only when it is offered, so pressing B with the bases
+  // empty does nothing rather than quietly attempting an illegal choice --
+  // `useKeyBindings` leaves an undefined binding's event alone.
+  const bunt = props.buntAvailable ? () => props.onChoose('Bunt') : undefined
+  useKeyBindings(
+    {
+      t: () => props.onChoose('Take'),
+      c: () => props.onChoose('Contact'),
+      p: () => props.onChoose('Power'),
+      b: bunt,
+      '1': () => props.onChoose('Take'),
+      '2': () => props.onChoose('Contact'),
+      '3': () => props.onChoose('Power'),
+      '4': bunt,
+      Enter: () => props.onChoose(props.recommended)
+    },
+    props.disabled !== true
+  )
+
   return (
     <div className="sc-screen">
       <ScoreStrip
