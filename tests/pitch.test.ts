@@ -28,7 +28,8 @@ import {
   BATTED_BALL_OUTCOMES,
   BUNT_OUTCOMES,
   CHECK_SWING_BASE,
-  CHECK_SWING_EYE_WEIGHT
+  CHECK_SWING_EYE_WEIGHT,
+  CHECK_SWING_TWO_STRIKE_FACTOR
 } from '../src/engine/constants'
 
 const FRESH: Count = { balls: 0, strikes: 0 }
@@ -475,13 +476,16 @@ describe('check swing inside resolvePitch (section 3.4a)', () => {
     expect(swingOutcomes('Contact', 0, makeBatter({ eye: 20 }))).toBe(0)
   })
 
-  it('is unavailable with two strikes: the batter has to protect the plate', () => {
+  it('scales by CHECK_SWING_TWO_STRIKE_FACTOR with two strikes', () => {
+    // Driven off the constant rather than a hardcoded outcome, so this
+    // stays honest if the factor is tuned. At the committed factor of 1 a
+    // two-strike count changes nothing; at 0 the rule would be off there.
     const sharp = makeBatter({ eye: 80 })
-    expect(checkSwingProbability({ balls: 0, strikes: 2 }, sharp)).toBe(0)
-    expect(checkSwingProbability({ balls: 3, strikes: 2 }, sharp)).toBe(0)
-    expect(swingOutcomes('Power', 0, sharp, { balls: 0, strikes: 2 })).toBe(0)
-    // ...but it is available at one strike.
-    expect(checkSwingProbability({ balls: 0, strikes: 1 }, sharp)).toBeGreaterThan(0)
+    const free = checkSwingProbability({ balls: 0, strikes: 1 }, sharp)
+    const protecting = checkSwingProbability({ balls: 0, strikes: 2 }, sharp)
+    expect(protecting).toBeCloseTo(free * CHECK_SWING_TWO_STRIKE_FACTOR, 10)
+    expect(checkSwingProbability({ balls: 3, strikes: 2 }, sharp)).toBeCloseTo(protecting, 10)
+    expect(swingOutcomes('Power', 0, sharp, { balls: 0, strikes: 2 })).toBeCloseTo(protecting, 2)
   })
 
   it('Take out of the zone is still a plain ball, not a check swing', () => {

@@ -42,14 +42,16 @@ describe('check swing (section 3.4a) inside applyPitch', () => {
     expect(next.count).toEqual({ balls: 1, strikes: 1 })
   })
 
-  it('is unavailable with two strikes, so the same rolls resolve as a swing', () => {
-    // Identical rolls to the one-strike case above. With two strikes the
-    // batter is protecting the plate, so there is no check-swing roll at
-    // all and the second value feeds the swing instead.
+  it('saves a strike three when the batter holds up with two strikes', () => {
+    // At the committed CHECK_SWING_TWO_STRIKE_FACTOR of 1 the rule applies
+    // with two strikes, and this is where most of its value to the Eye
+    // rating comes from: the pitch is ball one, not strike three.
     const state = makeGameState({ half: 'top', count: { balls: 0, strikes: 2 } })
     const rng = stub([0.999999, 0.0])
-    const { result } = applyPitch(state, 'Contact', teams, rng)
-    expect(result.pitchResolution.result.kind).not.toBe('check-swing')
+    const { state: next, result } = applyPitch(state, 'Contact', teams, rng)
+    expect(result.pitchResolution.result.kind).toBe('check-swing')
+    expect(result.event).toBeNull()
+    expect(next.count).toEqual({ balls: 1, strikes: 2 })
   })
 
   it('a swing that is not held up resolves as a swing, not a ball', () => {

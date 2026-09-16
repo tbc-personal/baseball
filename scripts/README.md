@@ -99,6 +99,59 @@ The reusable harness (`playGame`, `runBatch`, `runPolicyMatchup`,
 Split out purely so the test can run a handful of games without pulling in
 the CLI's default 10,000-game run.
 
+## tests/tuning-regression.test.ts
+
+`npm run tune` at 10,000 games on two seeds is the authoritative retune,
+and it stays manual: it takes minutes and needs a human reading the
+printed table to sign off. This test is the automated guard in between
+retunes -- it runs in CI on every PR and fails the moment an engine
+change silently drifts the game, instead of that drift sitting unnoticed
+until the next manual run.
+
+It calls the harness exactly as `scripts/tune.ts` does -- `runBatch` for
+the §7 band table, `runPolicyMatrix(games, BASE_SEED + 1, ...)` for the
+§7.1 matrix -- at **N = 3000 games, base seed 20260401**, and compares
+every measured value against a baseline recorded once in
+`tests/tuning-baseline.json`, within a tolerance (see the top of the test
+file for the exact numbers: ±0.006 on §7 rate stats, ±0.10 on §7 counting
+stats and mirror pitches-per-PA, ±0.05 on the §7.1 runs ratio, ±0.010 on
+§7.1 mirror rate stats). The tolerances are deliberately looser than the
+§7/§7.1 bands themselves -- this test isn't re-deriving those bands, it's
+catching a change that nudges the whole game without ever leaving band.
+It also asserts every §7 band and every §7.1 matrix row still passes at
+N=3000, using the harness's own `rowPasses`/`row.pass`, which catches a
+change that drifts a stat clean out of band.
+
+Every seed here is fully deterministic, so re-running this test against
+unchanged engine code reproduces the baseline bit-for-bit -- there is no
+sampling noise for the tolerances to absorb. They exist only so a
+deliberate, confirmed retune doesn't have to touch the baseline file for
+every negligible nudge.
+
+**Timing.** At N=3000, the full run (the band batch plus the ten batches
+the policy matrix runs -- a head-to-head and a mirror per guard policy)
+measured about 14 seconds standalone (`npx vite-node scripts/tune.ts --
+3000 20260401`) and about the same under `npx vitest run
+tests/tuning-regression.test.ts`, both well inside the ~90-second budget
+this test was built against. So the matrix did **not** need to be dropped
+to N=1500 -- both the band table and the matrix run at the same
+N=3000/seed-20260401 the baseline was recorded at. If a future engine
+change makes the harness meaningfully slower, split the band game count
+from the matrix game count in the test (matrix down to N=1500) rather
+than let this grow slow enough that nobody runs it locally, and
+regenerate the baseline at the new counts.
+
+**Regenerating the baseline.** Only do this deliberately, right after an
+intentional retune that has already been confirmed against a full
+`npm run tune` at 10,000 games on two seeds -- never to make a failing
+test pass; if it fails, that's telling you something moved. To
+regenerate: run the harness at the same settings the test uses (`runBatch`
+at N=3000/seed 20260401 for the band table, `runPolicyMatrix(3000,
+20260401 + 1, false)` for the matrix -- `npx vite-node scripts/tune.ts --
+3000 20260401` prints the same numbers, formatted, for a sanity check),
+then copy the measured values into `tests/tuning-baseline.json` field for
+field. See that file's `_comment` field for the exact fields it expects.
+
 ---
 
 # scripts/probe.ts
