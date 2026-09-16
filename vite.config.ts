@@ -43,7 +43,16 @@ const pwa = isPreview
        * because the problem is this worker, not a missing one.
        */
       workbox: {
-        navigateFallbackDenylist: [/^\/baseball\/preview\//],
+        /*
+         * Matches the preview path with or without its trailing slash. The
+         * server 301s /baseball/preview to /baseball/preview/, but a
+         * service worker answers the navigation before the request ever
+         * leaves the browser -- so a denylist that required the slash let
+         * the slashless URL fall through to this worker, which served the
+         * release from its precache and never redirected. Reported from a
+         * playtest that typed the URL by hand, which is how anyone types it.
+         */
+        navigateFallbackDenylist: [/^\/baseball\/preview(\/|$)/],
       },
       manifest: {
         name: 'Short Season',
