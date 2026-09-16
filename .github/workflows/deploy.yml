@@ -14,6 +14,19 @@
 # only added to the artifact if a build actually came out of it. If the
 # preview branch does not exist yet, this workflow publishes stable alone
 # and says so in the summary.
+#
+# Only main can actually deploy. The github-pages environment is created
+# with a deployment branch policy limited to the default branch, so a run
+# triggered by a push to preview builds everything correctly and is then
+# rejected at the environment gate -- a two-second failure with no logs,
+# which is a confusing way to find this out. So a push to any other branch
+# re-runs this workflow on main instead, which rebuilds both channels
+# anyway. A dispatched run has ref_name 'main', so it does not re-dispatch
+# and there is no loop.
+#
+# The alternative is to allow the preview branch in Settings ->
+# Environments -> github-pages -> deployment branches, after which pushes
+# to preview could deploy directly. This workflow does not require that.
 
 name: Deploy
 
@@ -32,7 +45,25 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # A push to anything but main cannot reach the Pages environment. Hand the
+  # job to main rather than failing at the gate.
+  redispatch:
+    if: github.ref_name != 'main'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Re-run this workflow on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh workflow run deploy.yml --ref main
+          echo "Pushed to ${GITHUB_REF_NAME}, which cannot deploy to Pages." >> "$GITHUB_STEP_SUMMARY"
+          echo "Re-ran the deploy on main; it rebuilds both channels." >> "$GITHUB_STEP_SUMMARY"
+
   build:
+    if: github.ref_name == 'main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/configure-pages@v5
@@ -113,7 +144,10 @@ jobs:
         with:
           path: site
 
+  # Skipped automatically when build is, since it needs it, but stated
+  # explicitly: this job is the one the environment gate rejects off main.
   deploy:
+    if: github.ref_name == 'main'
     needs: build
     runs-on: ubuntu-latest
     environment:
