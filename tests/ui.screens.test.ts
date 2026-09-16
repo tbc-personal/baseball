@@ -130,6 +130,26 @@ describe('sortBatting', () => {
     expect(rows.map((r) => r.batterId)).toEqual(before)
   })
 
+  it('sorts by the counting stats a box score is read on', () => {
+    // Hits were missing from this table entirely, which left every rate
+    // above with nothing to check it against. b and c are tied on hits at
+    // 8, so the tie-break is the label; a has 5.
+    expect(sortBatting(rows, 'h').map((r) => r.batterId)).toEqual(['c', 'b', 'a'])
+    // c has the most at-bats, and the most walks.
+    expect(sortBatting(rows, 'ab')[0].batterId).toBe('c')
+    expect(sortBatting(rows, 'bb')[0].batterId).toBe('c')
+  })
+
+  it('sorts by runs, doubles and triples', () => {
+    const extras: BattingRow[] = [
+      { batterId: 'x', label: 'X', stats: stats({ ab: 10, h: 4, doubles: 3, triples: 0, r: 1 }) },
+      { batterId: 'y', label: 'Y', stats: stats({ ab: 10, h: 4, doubles: 0, triples: 2, r: 6 }) }
+    ]
+    expect(sortBatting(extras, 'doubles')[0].batterId).toBe('x')
+    expect(sortBatting(extras, 'triples')[0].batterId).toBe('y')
+    expect(sortBatting(extras, 'r')[0].batterId).toBe('y')
+  })
+
   it('sorts by RBI descending, putting the run producer above the batter with fewer', () => {
     // a has 11 RBI, b has 4, c has 3.
     expect(sortBatting(rows, 'rbi').map((r) => r.batterId)).toEqual(['a', 'b', 'c'])

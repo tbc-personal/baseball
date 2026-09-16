@@ -13,7 +13,20 @@ import { battingAverage, onBasePercentage, sluggingPercentage } from '../engine/
 import { formatGamesBack, formatRate, formatRunDifferential } from './format'
 import { useKeyBindings } from './useKeyBindings'
 
-export type BattingSortKey = 'avg' | 'obp' | 'slg' | 'ops' | 'hr' | 'rbi' | 'k'
+export type BattingSortKey =
+  | 'avg'
+  | 'obp'
+  | 'slg'
+  | 'ops'
+  | 'ab'
+  | 'r'
+  | 'h'
+  | 'doubles'
+  | 'triples'
+  | 'hr'
+  | 'rbi'
+  | 'bb'
+  | 'k'
 
 export interface BattingRow {
   batterId: string
@@ -30,18 +43,33 @@ export interface SeasonScreenProps {
 }
 
 const STANDINGS_GRID = 'minmax(0, 1fr) 30px 30px 36px 44px 56px'
-// name | AVG | OBP | SLG | OPS | HR | RBI | K. The widths follow the
-// content, so reordering the columns means moving these too: AVG, OBP and
-// SLG print four characters (".321"), OPS prints five once a hitter clears
-// 1.000, and HR/RBI/K are small integers. This no longer has to fit a
-// 390px viewport on its own -- the batting table scrolls horizontally
-// (see the Batting section below), so the name column keeps a real
-// minimum instead of being squeezed to nothing.
-// name | AVG | OBP | SLG | OPS | HR | RBI | K. AVG and OBP cannot exceed
-// 1.000 and print four characters (".321"); SLG and OPS both can and do --
-// a 4-for-4 with a homer slugs 1.250 -- so both get room for five. The
-// table scrolls, so the name track no longer has to shrink to fit a phone.
-const BATTING_GRID = 'minmax(120px, 1fr) 42px 42px 50px 50px 30px 36px 28px'
+
+/**
+ * name | AVG | H | HR | RBI | OPS | OBP | SLG | AB | R | 2B | 3B | BB | K
+ *
+ * Ordered by what gets scanned, not by box-score convention, because only
+ * the first five or so columns are visible before the table has to be
+ * scrolled. AVG, H, HR and RBI are the four numbers a player checks first;
+ * OPS is fifth because it is what this table sorts by and the one figure
+ * that carries slugging, which used to be nowhere on this screen at all.
+ * The rest of an ordinary batting line follows to the right.
+ *
+ * Hits were missing entirely until a playtest asked where they were, which
+ * left every rate with nothing to check it against: a .333 average with no
+ * hits or at-bats beside it is a number you have to take on faith. Putting
+ * H fifth-from-left rather than in box-score position is the whole point --
+ * off-screen would not have fixed the complaint.
+ *
+ * Widths follow content, so reordering these columns means moving the
+ * tracks too. AVG and OBP cannot exceed 1.000 and print four characters
+ * (".321"); SLG and OPS both can and do -- a 4-for-4 with a homer slugs
+ * 1.250 -- so both get room for five. Everything else is a small integer.
+ * This no longer has to fit a 390px viewport: the table scrolls
+ * horizontally with the name column pinned, so the name track keeps a real
+ * minimum instead of being squeezed to nothing.
+ */
+const BATTING_GRID =
+  'minmax(120px, 1fr) 42px 26px 30px 34px 50px 42px 46px 32px 26px 28px 28px 28px 26px'
 
 export function sortBatting(rows: BattingRow[], key: BattingSortKey): BattingRow[] {
   const value = (r: BattingRow): number => {
@@ -58,6 +86,18 @@ export function sortBatting(rows: BattingRow[], key: BattingSortKey): BattingRow
         return r.stats.rbi
       case 'ops':
         return onBasePercentage(r.stats) + sluggingPercentage(r.stats)
+      case 'ab':
+        return r.stats.ab
+      case 'r':
+        return r.stats.r
+      case 'h':
+        return r.stats.h
+      case 'doubles':
+        return r.stats.doubles
+      case 'triples':
+        return r.stats.triples
+      case 'bb':
+        return r.stats.bb
       case 'k':
         return r.stats.k
     }
@@ -210,11 +250,17 @@ export function SeasonScreen(props: SeasonScreenProps) {
                 }}
               />
               {sortHeader('avg', 'AVG')}
-              {sortHeader('obp', 'OBP')}
-              {sortHeader('slg', 'SLG')}
-              {sortHeader('ops', 'OPS')}
+              {sortHeader('h', 'H')}
               {sortHeader('hr', 'HR')}
               {sortHeader('rbi', 'RBI')}
+              {sortHeader('ops', 'OPS')}
+              {sortHeader('obp', 'OBP')}
+              {sortHeader('slg', 'SLG')}
+              {sortHeader('ab', 'AB')}
+              {sortHeader('r', 'R')}
+              {sortHeader('doubles', '2B')}
+              {sortHeader('triples', '3B')}
+              {sortHeader('bb', 'BB')}
               {sortHeader('k', 'K')}
             </div>
             {sorted.map((r) => (
@@ -244,16 +290,22 @@ export function SeasonScreen(props: SeasonScreenProps) {
                   {r.label}
                 </span>
                 <span>{formatRate(battingAverage(r.stats))}</span>
-                <span>{formatRate(onBasePercentage(r.stats))}</span>
-                <span>{formatRate(sluggingPercentage(r.stats))}</span>
+                <span>{r.stats.h}</span>
+                <span>{r.stats.hr}</span>
+                <span>{r.stats.rbi}</span>
                 {/* OPS routinely clears 1.000 for a hot hitter early in a
                     season, unlike AVG/OBP/SLG which can't exceed 1.
                     formatRate's leading-zero strip is anchored to "0." so it
                     leaves a value >= 1 alone (e.g. "1.083", not ".083") --
                     confirmed below, no extra handling needed here. */}
                 <span>{formatRate(onBasePercentage(r.stats) + sluggingPercentage(r.stats))}</span>
-                <span>{r.stats.hr}</span>
-                <span>{r.stats.rbi}</span>
+                <span>{formatRate(onBasePercentage(r.stats))}</span>
+                <span>{formatRate(sluggingPercentage(r.stats))}</span>
+                <span>{r.stats.ab}</span>
+                <span>{r.stats.r}</span>
+                <span>{r.stats.doubles}</span>
+                <span>{r.stats.triples}</span>
+                <span>{r.stats.bb}</span>
                 <span>{r.stats.k}</span>
               </div>
             ))}
