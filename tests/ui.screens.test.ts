@@ -21,6 +21,7 @@ import {
   pitcherPreview
 } from '../src/ui/format'
 import { sortBatting, type BattingRow } from '../src/ui/SeasonScreen'
+import { inningColumnCount } from '../src/ui/BetweenScreen'
 import type { BatterStats } from '../src/engine/types'
 
 const stats = (o: Partial<BatterStats>): BatterStats => ({
@@ -495,5 +496,21 @@ describe('pitcherPreview', () => {
     for (const tendency of ['Attacker', 'Nibbler', 'Neutral'] as const) {
       expect(pitcherPreview({ name: 'X', control: 50, stuff: 50, tendency })).toContain(tendency)
     }
+  })
+})
+
+describe('inningColumnCount', () => {
+  it('draws regulation even when only a few innings have been played', () => {
+    // A box score in the 3rd should not look truncated to three columns.
+    expect(inningColumnCount([1, 0, 0], [0, 2])).toBe(9)
+    expect(inningColumnCount([], [])).toBe(9)
+  })
+
+  it('grows with extra innings, from whichever side has batted more', () => {
+    const nine = [0, 0, 0, 0, 0, 0, 0, 0, 0]
+    // Bottom of the 10th not batted yet: the away side is a column ahead.
+    expect(inningColumnCount([...nine, 1], nine)).toBe(10)
+    expect(inningColumnCount([...nine, 1], [...nine, 1])).toBe(10)
+    expect(inningColumnCount([...nine, 0, 0, 0, 2], [...nine, 0, 0, 0])).toBe(13)
   })
 })

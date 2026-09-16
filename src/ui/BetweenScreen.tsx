@@ -8,6 +8,7 @@
 
 import type { PlayLogEntry } from '../engine/sim'
 import { halfInningSummary, milestoneLine, playGutter } from './format'
+import { useEffect, useRef } from 'preact/hooks'
 import { useKeyBindings } from './useKeyBindings'
 
 export interface BetweenScreenProps {
@@ -60,7 +61,60 @@ export interface BetweenScreenProps {
   onDone: () => void
 }
 
-const INNING_COLUMNS = 9
+/**
+ * A game is nine innings unless it is not. The line score always shows at
+ * least this many columns, so a 3rd-inning box does not look truncated,
+ * and grows past it for extra innings -- before this it was a hard nine
+ * and innings 10 and up were not rendered at all, which left the R column
+ * disagreeing with the innings beside it in any game that went long.
+ */
+const REGULATION_INNINGS = 9
+
+/**
+ * Fixed rather than fractional, because the line score scrolls once a game
+ * runs long and a fractional track cannot overflow its container. 23px is
+ * what a ninth of the row worked out to at the 390px width this is played
+ * at, so a nine-inning box looks exactly as it did.
+ */
+const INNING_COLUMN_WIDTH = 23
+
+/**
+ * How many inning columns the line score draws: never fewer than
+ * regulation, and never fewer than the innings actually played.
+ */
+export function inningColumnCount(away: readonly number[], home: readonly number[]): number {
+  return Math.max(REGULATION_INNINGS, away.length, home.length)
+}
+
+/**
+ * R, H and K pin to the right edge the way the team name pins to the left,
+ * so a game that has run long never scrolls its own score out of view. The
+ * offsets are the widths of the columns to their right, which only works
+ * because those columns are a fixed 26px. When the line score fits without
+ * scrolling these sit exactly where they would anyway.
+ */
+const TOTALS_COLUMN_WIDTH = 26
+
+function stickyTotalCell(fromRight: number) {
+  return {
+    position: 'sticky' as const,
+    right: fromRight * TOTALS_COLUMN_WIDTH,
+    zIndex: 1,
+    background: 'var(--sc-paper)',
+    boxShadow: fromRight === 2 ? '-3px 0 4px -2px rgba(0, 0, 0, 0.16)' : undefined
+  }
+}
+
+/** Shared by the pinned team-name cell in the header and in both rows. */
+const stickyNameCell = {
+  textAlign: 'left' as const,
+  position: 'sticky' as const,
+  left: 0,
+  zIndex: 1,
+  background: 'var(--sc-paper)',
+  borderRight: '1px solid var(--sc-faint-rule)',
+  boxShadow: '3px 0 4px -2px rgba(0, 0, 0, 0.16)'
+}
 
 export function BetweenScreen(props: BetweenScreenProps) {
   // One primary action: on to the next half-inning. The half-inning is the
@@ -69,7 +123,23 @@ export function BetweenScreen(props: BetweenScreenProps) {
   useKeyBindings({ Enter: props.onNext })
 
   const ls = props.lineScore
-  const gridTemplate = `62px repeat(${INNING_COLUMNS}, minmax(0, 1fr)) 26px 26px 26px`
+  const inningColumns = inningColumnCount(ls.away, ls.home)
+  const extraInnings = inningColumns > REGULATION_INNINGS
+
+  /*
+   * A game that has gone long opens at its live end rather than at the
+   * first inning. The innings worth looking at in the 11th are the 10th and
+   * the 11th, and at the default scroll position those sit behind the
+   * pinned R/H/K -- so the one thing extra innings are scrolled for would
+   * be the one thing hidden. Regulation games fit and are left alone.
+   */
+  const scroller = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    const el = scroller.current
+    if (el === null || !extraInnings) return
+    el.scrollLeft = el.scrollWidth
+  }, [extraInnings, inningColumns])
+  const gridTemplate = `62px repeat(${inningColumns}, ${INNING_COLUMN_WIDTH}px) repeat(3, ${TOTALS_COLUMN_WIDTH}px)`
 
   const row = (
     label: string,
@@ -87,12 +157,16 @@ export function BetweenScreen(props: BetweenScreenProps) {
         fontSize: '13px',
         padding: '6px 0',
         textAlign: 'center',
+        // max-content so the row grows with the innings and its rule spans
+        // the whole scrollable width, not just the part on screen.
+        width: 'max-content',
+        minWidth: '100%',
         borderBottom: lastRow ? undefined : '1px solid var(--sc-faint-rule)'
       }}
     >
       <span
         style={{
-          textAlign: 'left',
+          ...stickyNameCell,
           textTransform: 'uppercase',
           letterSpacing: '0.06em',
           fontSize: '12px',
@@ -102,7 +176,7 @@ export function BetweenScreen(props: BetweenScreenProps) {
       >
         {label}
       </span>
-      {Array.from({ length: INNING_COLUMNS }, (_, i) => {
+      {Array.from({ length: inningColumns }, (_, i) => {
         const played = i < innings.length
         const isCurrent = own && i === ls.currentInningIndex
         return (
@@ -117,9 +191,9 @@ export function BetweenScreen(props: BetweenScreenProps) {
           </span>
         )
       })}
-      <span style={{ fontWeight: 700 }}>{runs}</span>
-      <span>{hits}</span>
-      <span>{strikeouts}</span>
+      <span style={{ ...stickyTotalCell(2), fontWeight: 700 }}>{runs}</span>
+      <span style={stickyTotalCell(1)}>{hits}</span>
+      <span style={stickyTotalCell(0)}>{strikeouts}</span>
     </div>
   )
 
@@ -230,7 +304,16 @@ export function BetweenScreen(props: BetweenScreenProps) {
         </div>
       )}
 
-      <div style={{ borderTop: '1px solid var(--sc-ink)', borderBottom: '1px solid var(--sc-ink)' }}>
+      {/* One scroll container around the header and both rows, so they can
+          never scroll out of step with each other. */}
+      <div
+        ref={scroller}
+        style={{
+          borderTop: '1px solid var(--sc-ink)',
+          borderBottom: '1px solid var(--sc-ink)',
+          overflowX: 'auto'
+        }}
+      >
         <div
           style={{
             display: 'grid',
@@ -239,16 +322,18 @@ export function BetweenScreen(props: BetweenScreenProps) {
             color: 'var(--sc-muted-ink)',
             padding: '6px 0 4px 0',
             borderBottom: '1px solid var(--sc-faint-rule)',
-            textAlign: 'center'
+            textAlign: 'center',
+            width: 'max-content',
+            minWidth: '100%'
           }}
         >
-          <span />
-          {Array.from({ length: INNING_COLUMNS }, (_, i) => (
+          <span style={stickyNameCell} />
+          {Array.from({ length: inningColumns }, (_, i) => (
             <span key={i}>{i + 1}</span>
           ))}
-          <span style={{ fontWeight: 700, color: 'var(--sc-ink)' }}>R</span>
-          <span style={{ fontWeight: 700, color: 'var(--sc-ink)' }}>H</span>
-          <span style={{ fontWeight: 700, color: 'var(--sc-ink)' }}>K</span>
+          <span style={{ ...stickyTotalCell(2), fontWeight: 700, color: 'var(--sc-ink)' }}>R</span>
+          <span style={{ ...stickyTotalCell(1), fontWeight: 700, color: 'var(--sc-ink)' }}>H</span>
+          <span style={{ ...stickyTotalCell(0), fontWeight: 700, color: 'var(--sc-ink)' }}>K</span>
         </div>
         {row(ls.awayShort, ls.away, ls.awayRuns, ls.awayHits, ls.awayStrikeouts, ls.ownSide === 'away', false)}
         {row(ls.homeShort, ls.home, ls.homeRuns, ls.homeHits, ls.homeStrikeouts, ls.ownSide === 'home', true)}
