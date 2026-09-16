@@ -7,7 +7,10 @@ Bunt where it applies); the opponent's half-innings are simulated instantly
 so you never wait. There are no timers and no reflexes, and the game saves
 after every pitch, so closing the tab in a 3-2 count costs nothing.
 
-**Play at:** https://tbc-personal.github.io/baseball/
+**Play at:** https://tbc-personal.github.io/baseball/ — the stable release.
+
+**Play the latest build:** https://tbc-personal.github.io/baseball/preview/ —
+whatever is on the `preview` branch, for playtesting before it is released.
 
 ## Running it locally
 
@@ -46,10 +49,64 @@ pure functions.
   baseball — derived numbers come from engine selectors.
 - `scripts/` holds the tuning harness and the icon sources.
 
+## Two builds
+
+`main` publishes the stable release at `/baseball/`; the `preview` branch
+publishes the latest build at `/baseball/preview/`. A push to either
+rebuilds and republishes both, because GitHub Pages serves one artifact and
+`.github/workflows/deploy.yml` assembles it from both branches.
+
+To start using the preview channel, create the branch and push to it:
+
+```bash
+git checkout -b preview main
+git push -u origin preview
+```
+
+Until that branch exists the workflow publishes the release on its own and
+notes it in the run summary. The preview branch can never break the
+release: its checkout, install and build all continue on error, and the
+preview directory is only added to the artifact if a build came out of it.
+Preview is deliberately **not** gated on lint or tests — the point is to
+play something still being worked on — but the tests do run and a failure
+is written to the run summary.
+
+Three things differ in a preview build, and they are all there to stop it
+interfering with the release it shares an origin with:
+
+- **It keeps its own save.** `localStorage` is per-origin, not per-path, so
+  both builds would otherwise share one season — and since the two exist
+  because their engines differ, that save would be resumed under the wrong
+  tuning. The preview build writes `shortSeason:save:preview`.
+- **It ships no service worker**, and the release's worker is told to keep
+  out of the preview path. Its scope covers `/baseball/preview/`, so
+  without that it answers preview navigations from its own precache and
+  serves the release at the preview URL. Offline play is a property of the
+  release; a build you are testing should load the newest code every time.
+- **It says so**, with a "latest build" marker on the home screen, so an
+  empty season at the wrong URL is explained rather than alarming.
+
+## Keyboard
+
+The game is mostly played on a laptop, so every screen can be driven from
+the keyboard. On a device with a real pointer each button shows the key
+that presses it.
+
+| Screen | Keys |
+|---|---|
+| At bat | `T` `C` `P` `B`, or `1` `2` `3` `4` — Take, Contact, Power, Bunt. `Enter` takes the recommended choice. |
+| Home, between innings | `Enter` — the primary action |
+| Season, settings | `Esc` — back |
+
+Keys never fire while you are typing in the team-name field or a save-code
+box, and `Enter` is left alone whenever a button has focus, so tabbing to a
+button and pressing `Enter` does what you would expect.
+
 ## Saves
 
 Game state lives in your browser's localStorage, so it is per-browser and
-per-device. To move a season between devices, use **Settings → Copy save
+per-device. The save code in Settings moves a season between devices — and
+between the two builds above, which do not share one. To move a season between devices, use **Settings → Copy save
 code**, paste the code into Notes or a message to yourself, open it on the
 other device, and paste it into **Settings → Load a save code**. The app
 shows you what the pasted save contains before it replaces anything, and

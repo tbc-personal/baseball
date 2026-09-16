@@ -10,10 +10,24 @@ import type { StorageLike } from './storage'
 import { migrate, DEFAULT_TEAM_NAME } from './migrate'
 import { isAppState, isEnvelopeLike } from './validate'
 import { createSeason } from '../engine/season'
+import { IS_PREVIEW } from '../buildChannel'
 
-export const SAVE_KEY = 'shortSeason:save'
+/**
+ * The preview build keeps its own season.
+ *
+ * GitHub Pages serves the stable build and the preview build from one
+ * origin, and localStorage is scoped to the origin rather than the path, so
+ * a shared key would have the preview build reading and overwriting the
+ * season being played on the stable one. Since the two builds exist
+ * precisely because their engines differ, that save would not just be
+ * shared, it would be wrong -- a game saved mid-at-bat under one set of
+ * tuning constants resumed under another.
+ */
+const KEY_SUFFIX = IS_PREVIEW ? ':preview' : ''
+
+export const SAVE_KEY = `shortSeason:save${KEY_SUFFIX}`
 /** Holds the local state a save-code import replaced, for one "Undo load". */
-export const UNDO_KEY = 'shortSeason:save:undo'
+export const UNDO_KEY = `shortSeason:save${KEY_SUFFIX}:undo`
 
 /** A brand-new season: no game in progress, default team name. */
 export function freshAppState(seed: number, teamName: string = DEFAULT_TEAM_NAME): AppState {

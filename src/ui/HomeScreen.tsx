@@ -8,6 +8,7 @@
 import type { StandingsRow } from '../engine/season'
 import { formatGamesBack, type PrimaryAction } from './format'
 import { useKeyBindings } from './useKeyBindings'
+import { IS_PREVIEW } from '../buildChannel'
 
 export interface HomeScreenProps {
   teamName: string
@@ -54,8 +55,29 @@ export function HomeScreen(props: HomeScreenProps) {
   return (
     <div className="sc-screen" style={{ paddingTop: '36px', gap: '22px' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <div style={{ fontSize: '12px', letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--sc-muted-ink)' }}>
-          Short Season
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '8px' }}>
+          <span style={{ fontSize: '12px', letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--sc-muted-ink)' }}>
+            Short Season
+          </span>
+          {/* The preview build says so. It is served from the same origin as
+              the release but keeps its own save (store/persistence.ts), so
+              without this the honest reaction to opening the wrong URL is
+              "where has my season gone". */}
+          {IS_PREVIEW && (
+            <span
+              style={{
+                fontSize: '10px',
+                letterSpacing: '0.16em',
+                textTransform: 'uppercase',
+                color: 'var(--sc-pencil-red)',
+                border: '1px solid var(--sc-pencil-red)',
+                padding: '2px 6px',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              Latest build
+            </span>
+          )}
         </div>
         <div
           style={{
