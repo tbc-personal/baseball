@@ -1,8 +1,25 @@
+# Publishes two builds of the game to one GitHub Pages site:
+#
+#   https://tbc-personal.github.io/baseball/          the stable release, from main
+#   https://tbc-personal.github.io/baseball/preview/  the latest build, from preview
+#
+# Pages serves a single artifact, so both are built here and assembled into
+# one directory tree rather than deployed by two workflows that would
+# overwrite each other. A push to either branch republishes both, which is
+# also what keeps them consistent: there is no state on the Pages side to
+# get out of step.
+#
+# The preview branch is never allowed to break the release. Its checkout,
+# install and build all continue on error, and the preview directory is
+# only added to the artifact if a build actually came out of it. If the
+# preview branch does not exist yet, this workflow publishes stable alone
+# and says so in the summary.
+
 name: Deploy
 
 on:
   push:
-    branches: [main]
+    branches: [main, preview]
   workflow_dispatch:
 
 permissions:
@@ -18,19 +35,83 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/configure-pages@v5
+
+      # ---- stable: main. Gated on lint and tests; a failure here fails the
+      # whole deploy, which is the point of a release channel.
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: stable
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: 'npm'
-      - uses: actions/configure-pages@v5
-      - run: npm ci
-      - run: npm run lint
-      - run: npm test
-      - run: npm run build
+          cache-dependency-path: stable/package-lock.json
+      - name: Install (stable)
+        working-directory: stable
+        run: npm ci
+      - name: Lint (stable)
+        working-directory: stable
+        run: npm run lint
+      - name: Test (stable)
+        working-directory: stable
+        run: npm test
+      - name: Build (stable)
+        working-directory: stable
+        run: npm run build
+
+      # ---- preview: the preview branch, if there is one.
+      - name: Is there a preview branch?
+        id: preview_branch
+        run: |
+          if git ls-remote --exit-code --heads "https://github.com/${GITHUB_REPOSITORY}.git" preview >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "No preview branch; publishing the stable release only." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.preview_branch.outputs.exists == 'true'
+        continue-on-error: true
+        with:
+          ref: preview
+          path: preview
+
+      # Deliberately not gated on lint or tests. The whole point of this
+      # channel is to play a build that is still being worked on; a failing
+      # test should not stop you looking at it. Tests still run, and their
+      # result is written to the run summary, so a red preview is visible
+      # rather than silent.
+      - name: Build (preview)
+        id: preview_build
+        if: steps.preview_branch.outputs.exists == 'true'
+        continue-on-error: true
+        working-directory: preview
+        env:
+          BUILD_CHANNEL: preview
+        run: |
+          npm ci
+          npm test || echo "PREVIEW TESTS FAILED -- publishing the build anyway." >> "$GITHUB_STEP_SUMMARY"
+          npm run build
+
+      # ---- assemble: stable at the root, preview underneath it.
+      - name: Assemble the site
+        run: |
+          mkdir -p site
+          cp -r stable/dist/. site/
+          if [ -d preview/dist ]; then
+            mkdir -p site/preview
+            cp -r preview/dist/. site/preview/
+            echo "Published stable and preview." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Preview build produced nothing; published the stable release only." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: site
 
   deploy:
     needs: build
