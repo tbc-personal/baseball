@@ -1,4 +1,199 @@
-# Tuning (round 2, after REVIEW_1.md)
+# Tuning
+
+- [Phase A (round 3)](#phase-a-round-3) — the current committed tuning
+- [Round 2](#round-2-after-review_1md) — the previous round, kept for its evidence
+
+---
+
+# Phase A (round 3)
+
+The rating-economy retune from `docs/ROADMAP.md` §0. Measured with
+`npm run tune`, the §5.4 opponent policy on both sides, all seven teams
+cycled through as matchups, 10,000 games on base seed `20260401` and
+cross-checked on `777`.
+
+## Result
+
+**All eight §7 bands pass and all five §7.1 matrix rows pass, on both
+seeds.** This is the first overall PASS the project has recorded; round 2
+finished 7 of 8, with the strikeout band unreachable.
+
+Two things made it reachable, and only one of them is a band change:
+
+- The strikeout band was **widened from 20–25% to 22–28%** on the owner's
+  decision — see §7 of `GAME_DESIGN.md` for the reasoning. Measured at
+  26.5%, it would have failed the old band.
+- A **harness measurement bug** was found and fixed (see *The mirror-batch
+  selection bias* below). It did not affect the band table, but it made
+  one matrix row report a number that was wrong by a factor of three.
+
+### Section 7 bands, 10,000 games
+
+| Stat | Seed 20260401 | Seed 777 | Band | |
+|---|---|---|---|---|
+| Runs per team per game | 4.56 | 4.61 | 4.20–4.90 | PASS |
+| Batting average | .258 | .258 | .245–.265 | PASS |
+| On-base percentage | .326 | .327 | .315–.335 | PASS |
+| Strikeout rate (per PA) | 26.5% | 26.5% | 22.0–28.0% | PASS |
+| Walk rate (per PA) | 9.1% | 9.2% | 8.0–10.0% | PASS |
+| Home runs per team per game | 1.09 | 1.10 | 1.00–1.30 | PASS |
+| Pitches per plate appearance | 3.74 | 3.74 | 3.70–4.00 | PASS |
+| Plate appearances per half-inning | 4.37 | 4.37 | 4.10–4.50 | PASS |
+
+### Section 7.1 matrix, 10,000 games
+
+Runs as a fraction of the sim policy's, both seeds:
+
+| Policy | Seed 20260401 | Seed 777 | Band | Round 2 |
+|---|---|---|---|---|
+| Always Take | 49.4% | 49.7% | ≤60% | 57.6% |
+| Always Contact | 98.7% | 99.0% | 60–110% | 97.7% |
+| Always Power | 104.7% | 105.0% | ≤110% | 103.1% |
+| Take until two strikes, then Contact | 95.2% | 97.6% | ≤110% | 95.4% |
+| Take unless Likely strike (Power); Contact 2K | 111.8% | 110.4% | 95–130% | 110.6% |
+
+Every row keeps its verdict across seeds. The tightest is always-Power at
+104.7 / 105.0 against a 110% ceiling — five points of margin, better than
+round 2's seven-point margin was fragile at, and deliberately bought (see
+the ball rows below). Always-Take improved most, from 57.6% against a 60%
+ceiling to 49.4%: it was the row round 2 flagged as having the least
+margin, and it is no longer the binding constraint.
+
+## What changed, and why
+
+### `CHALLENGE_WEIGHT` 0.50 → 0.25
+
+At 0.50 the §3.2 challenge term was strong enough to decide what the
+Contact rating *meant*. Measured against the §5.4 policy before the change:
+
+| Contact | AVG | OBP | K% | BB% |
+|---|---|---|---|---|
+| 20 | .252 | .253 | 19.1% | 0.2% |
+| 50 | .254 | .299 | 27.7% | 6.1% |
+| 80 | **.246** | .429 | **30.4%** | 24.2% |
+
+The best contact hitter on the roster had the lowest batting average and
+the highest strikeout rate, because the pitcher worked around him, the
+count-aware policy took, and the rating cashed out as walks and called
+strike threes. At 0.25 the same sweep runs .223 / .254 / .284 — monotonic,
+which is the whole point — and the walk rate at Contact 80 falls to 11.7%.
+
+Hanging the term on Power instead was measured and **rejected**: it fixes
+Contact and inverts Power (.287 at Power 20 against .247 at Power 80),
+taking Power's value across its range from +0.091 to +0.053 while
+Contact's rises to +0.141. Hanging it on mean threat `(C+P)/2` was also
+rejected, for the same reason in milder form. The term is too strong to
+hang on any single rating; the fix is less of it, not a different home for
+it. `docs/ROADMAP.md` §0.4 has the full tables.
+
+The two-strike read table was re-derived at 0.25, since that is what the
+term was introduced to fix. The property round 2 needed — that a
+two-strike read is not `Likely ball` for every hitter — still holds; the
+band of hitters who get challenged at 0-2 narrows from Contact < 47 to
+Contact < 44. The measured strikeout composition did not regress.
+
+### Check swing: new rule (§3.4a)
+
+The Eye rating did essentially nothing. Across its 20–80 range it was
+worth +0.013 of run value against +0.092 for Contact and +0.095 for
+Power, and under an always-Contact policy exactly zero, because a policy
+that ignores the read ignores the only thing Eye touched.
+
+The rule: a swing at a pitch **out of the zone** is held up, and counts as
+a ball, with probability `clamp(0.10 + adj(Eye) * 0.50, 0, 1)`, scaled by
+`CHECK_SWING_TWO_STRIKE_FACTOR` (committed at 1). Eye is now worth
+**+0.049**, close enough to the other two that the rating spread is no
+longer the game's largest balance problem.
+
+Two things about it are worth recording because they were not obvious:
+
+- **It acts on swings, not takes.** That is why it was preferred to the
+  alternative of shading borderline called strikes by Eye, which would
+  have rewarded only taking and widened the always-Take row that round 2
+  flagged as the thinnest. Measured, always-Take is unmoved by it.
+- **The two-strike case is nearly all of its value and nearly none of its
+  cost.** The valuable check swing is the one that rescues a strike three.
+  Measured across the factor at 800 mirror games per point:
+
+  | factor | Eye 20→80 run value | league AVG | league OBP | K rate |
+  |---|---|---|---|---|
+  | 0 | +0.015 | .265 | .329 | 26.8% |
+  | 0.5 | +0.030 | .266 | .331 | 26.6% |
+  | 1 | +0.047 | .266 | .333 | 26.4% |
+
+  Tripling what Eye is worth costs one point of league batting average, so
+  the factor is committed at 1. An earlier reading that suggested the
+  opposite came from a flawed measurement and does not stand.
+
+### `BATTED_BALL_OUTCOMES`, both ball rows
+
+| Cell | R7 (round 2) | Phase A |
+|---|---|---|
+| Contact, ball | 0.825 / 0.14 / 0.028 / 0.0035 / 0.0035 | **0.86 / 0.112 / 0.0224 / 0.0028 / 0.0028** |
+| Power, ball | 0.818 / 0.091 / 0.049 / 0.007 / 0.035 | **0.88 / 0.06 / 0.0323 / 0.0046 / 0.0231** |
+
+This is where the check swing is paid for. The rule removes chase swings,
+which were mostly outs, so it lifts league batting average about ten
+points on its own — enough to put it out of band. Taxing the rows only a
+chase can reach charges that back to the policies doing the chasing rather
+than to the league: it brought batting average from .267 to .258 and
+pulled always-Power from 108% of the sim to 105%. Both cells stay inside
+the ±30% §7.2 allows from their §3.5 values. Every row still sums to 1.0.
+
+## The mirror-batch selection bias
+
+A pre-existing bug in `scripts/tune-lib.ts`, found while setting per-policy
+bands, and the reason round 2's always-Take row reports a walk rate that
+is wrong by a factor of three.
+
+The §7.1 matrix draws each policy's own rate stats from a **mirror** batch,
+the policy played on both sides. For always-Take that is a game in which
+nobody ever puts a ball in play: runs can only score on bases-loaded
+walks, so the games are scoreless and go to extra innings — **measured, an
+average of 76.5 innings against a normal game's 9.1**. The matchups that
+drag on longest are exactly the ones where the pitcher throws the most
+strikes and issues the fewest walks, so the batch over-samples them badly.
+Mean 0-0 `p_zone` in those games measured 0.641 against 0.552 in normal
+ones.
+
+The effect on the reported numbers:
+
+| Always Take, mirror batch | Uncapped (round 2) | Capped (Phase A) |
+|---|---|---|
+| Walk rate | 10.1% | **28.2%** |
+| Strikeout rate | (not reported) | 71.8% |
+| Pitches per PA | 4.44 | 4.83 |
+
+The capped figure is the right one. Two independent checks agree with it
+and not with the uncapped one: an exact Markov walk over the count model
+gives 19.5% for a league-average pitcher, and `npm run probe policies`
+gives 22.8% for a 50/50/50 batter — both in the same region as 28.2% once
+roster spread is accounted for, and nowhere near 10%.
+
+**The fix** is `maxInnings` on `runBatch`/`playGame`, set to regulation for
+mirror batches only. Only per-PA and per-AB rates are read from a mirror
+batch, so truncating a tied game costs nothing. The runs verdict comes
+from the head-to-head batch, which does not degenerate because the sim
+side scores. The other four policy rows moved by less than a point, which
+is the expected result: they all put the ball in play, so their games end
+on time.
+
+Anyone re-reading round 2's matrix should treat its `Walk%` and `P/PA`
+columns as unreliable for always-Take and roughly right for everything
+else.
+
+## Reproducing
+
+```
+npm run tune                 # 10,000 games, base seed 20260401
+npm run tune -- 10000 777    # the second seed
+npm run probe experiment     # the candidate comparison behind §0.4/§0.7
+npx vitest run tests/tuning-regression.test.ts   # the CI drift guard
+```
+
+---
+
+# Round 2, after REVIEW_1.md
 
 Measured with `npm run tune`, the §5.4 opponent policy on both sides, all
 seven teams cycled through as matchups. 10,000 games for the band table,

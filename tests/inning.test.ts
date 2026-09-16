@@ -12,6 +12,55 @@ function stub(values: number[]): StubRng {
   return new StubRng([...values, ...PAD])
 }
 
+describe('check swing (section 3.4a) inside applyPitch', () => {
+  it('counts as a ball, and four of them walk the batter', () => {
+    // Each pitch: location roll high -> out of the zone, then the check-swing
+    // roll low -> held up. The fixture batter has Eye 50, so his check-swing
+    // probability is the 0.15 base and 0.0 clears it.
+    let state = makeGameState({ half: 'top', count: { balls: 0, strikes: 0 } })
+    for (let ball = 1; ball <= 4; ball += 1) {
+      const rng = stub([0.999999, 0.0])
+      const { state: next, result } = applyPitch(state, 'Power', teams, rng)
+      expect(result.pitchResolution.result.kind).toBe('check-swing')
+      if (ball < 4) {
+        expect(result.paEnded).toBe(false)
+        expect(next.count).toEqual({ balls: ball, strikes: 0 })
+      } else {
+        expect(result.paEnded).toBe(true)
+        expect(result.event).toBe('walk')
+      }
+      state = next
+    }
+  })
+
+  it('does not add a strike at one strike', () => {
+    const state = makeGameState({ half: 'top', count: { balls: 0, strikes: 1 } })
+    const rng = stub([0.999999, 0.0])
+    const { state: next, result } = applyPitch(state, 'Contact', teams, rng)
+    expect(result.pitchResolution.result.kind).toBe('check-swing')
+    expect(result.event).toBeNull()
+    expect(next.count).toEqual({ balls: 1, strikes: 1 })
+  })
+
+  it('is unavailable with two strikes, so the same rolls resolve as a swing', () => {
+    // Identical rolls to the one-strike case above. With two strikes the
+    // batter is protecting the plate, so there is no check-swing roll at
+    // all and the second value feeds the swing instead.
+    const state = makeGameState({ half: 'top', count: { balls: 0, strikes: 2 } })
+    const rng = stub([0.999999, 0.0])
+    const { result } = applyPitch(state, 'Contact', teams, rng)
+    expect(result.pitchResolution.result.kind).not.toBe('check-swing')
+  })
+
+  it('a swing that is not held up resolves as a swing, not a ball', () => {
+    // Same location roll, but the check-swing roll fails (0.999999 > 0.15).
+    const state = makeGameState({ half: 'top', count: { balls: 0, strikes: 0 } })
+    const rng = stub([0.999999, 0.999999])
+    const { result } = applyPitch(state, 'Contact', teams, rng)
+    expect(result.pitchResolution.result.kind).not.toBe('check-swing')
+  })
+})
+
 describe('GAME_DESIGN.md section 4.1 scenarios (implemented verbatim)', () => {
   it('Given runners on 1st and 3rd, 1 out, batter hits a single with R2-scores roll irrelevant / When resolved with the "R1 to third" roll failing / Then R3 scores, R1 is on second, batter on first, 1 out, +1 run', () => {
     const state = makeGameState({

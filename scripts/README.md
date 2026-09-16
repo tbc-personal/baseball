@@ -52,11 +52,20 @@ Two tables:
    - `Runs vs sim` — that policy's runs per team-game as a percentage of
      the sim policy's, from the head-to-head batch.
    - `Band` — the §7.1 requirement for that row.
-   - `Walk%` and `P/PA` — the policy's *own* walk rate and pitches per
-     plate appearance, measured from the **mirror** batch (the policy on
-     both sides), not the head-to-head. These are how a degenerate optimum
-     shows itself: a policy that walks two times in three is visible in
-     these columns before its run ratio is read.
+   - `AVG`, `OBP`, `SLG`, `OPS`, `K%`, `Walk%` and `P/PA` — the policy's
+     *own* full rate profile, measured from a **mirror** batch (that
+     policy on both sides), not the head-to-head. `runPolicyMatchup` (the
+     head-to-head) folds both sides' events into one scratch tally, so it
+     cannot report a single policy's rates; the mirror batch is clean,
+     single-policy data, and it is where all seven of these columns come
+     from. They are how a degenerate optimum shows itself before the run
+     ratio is read: a policy that walks two times in three is visible in
+     `Walk%`, and a policy that sits comfortably inside its runs band
+     while hitting far above the league average -- which is what the
+     season screen actually prints -- is visible in `AVG` and the columns
+     built from it. `OPS` is `OBP + SLG`, not independently measured.
+     There are no pass/fail bands on these seven columns; PASS/FAIL is
+     still decided by the runs ratio alone.
 
 An **Overall** verdict line follows, plus a summary of anything out of
 band. **Overall PASS requires every band and every matrix row to pass.**
@@ -170,3 +179,35 @@ as the baseline row disagreeing with `npm run probe ratings`.
 
 Results and the recommended package are in `docs/ROADMAP.md` §0.4, §0.6
 and §0.7.
+
+## Mirror batches are capped at regulation
+
+`runPolicyMatrix` passes `maxInnings: INNINGS_PER_GAME` to the mirror
+batches. This is not cosmetic — without it one matrix row reported a
+number that was wrong by a factor of three.
+
+A mirror batch plays the guard policy on **both** sides. For always-Take
+that is a game in which nobody ever puts a ball in play: runs can only
+score on bases-loaded walks, so the games are scoreless and run to extra
+innings — measured, an average of 76.5 innings against a normal game's
+9.1. The matchups that drag on longest are exactly the ones where the
+pitcher throws the most strikes and walks the fewest, so the batch
+over-samples them and every rate drawn from it is biased. Uncapped,
+always-Take measured a 10% walk rate against a true per-PA rate near 28%.
+
+Only per-PA and per-AB rates are read from a mirror batch, so truncating a
+tied game costs nothing. **Nothing that reads runs per game or a final
+score may be measured from a capped batch** — the runs verdict comes from
+the head-to-head batch, which is uncapped and does not degenerate because
+the sim side scores. `docs/TUNING.md` has the full write-up.
+
+## The visible-stats diagnostic
+
+`npm run tune` prints an OPS comparison between the intended thoughtful
+policy and the best one-button policy. **It is reported, not banded, and
+nothing gates on it.** OPS weights a point of on-base and a point of
+slugging equally; this engine's run value weights on-base roughly twice as
+heavily, so an always-Power policy lands level with the thoughtful play on
+OPS while scoring seven points fewer runs. Read the margin next to the
+runs column, never on its own. `docs/ROADMAP.md` §0.8 explains why this is
+a design question rather than a tuning one.

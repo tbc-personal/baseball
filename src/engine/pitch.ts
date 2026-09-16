@@ -27,7 +27,11 @@ import {
   CONTACT_SHIFT_OUT,
   POWER_SHIFT_DOUBLE,
   POWER_SHIFT_HR,
-  BUNT_OUTCOMES
+  BUNT_OUTCOMES,
+  STRIKES_FOR_STRIKEOUT,
+  CHECK_SWING_BASE,
+  CHECK_SWING_EYE_WEIGHT,
+  CHECK_SWING_TWO_STRIKE_FACTOR
 } from './constants'
 
 // ============================================================================
@@ -163,6 +167,35 @@ export function resolveSwing(
 }
 
 // ============================================================================
+// 3.4a Check swing
+// ============================================================================
+
+/**
+ * The probability that a swing at a pitch out of the zone is checked, so
+ * the pitch counts as a ball rather than resolving as a swing.
+ *
+ * Pitches in the zone cannot be checked. Holding up on a strike is just
+ * taking a strike, which the Take choice already covers, and letting Eye
+ * buy that would reward taking -- the thing the rule was chosen over.
+ *
+ * Bunts are not checked either: section 3.6 resolves a bunt from a flat
+ * table that does not look at location at all, so there is no "swing at a
+ * ball" for the rule to act on.
+ *
+ * See CHECK_SWING_BASE in constants.ts for why this rule exists.
+ */
+export function checkSwingProbability(count: Count, batter: Batter): number {
+  // With two strikes the batter is protecting the plate rather than
+  // choosing whether to offer, so the rule is scaled there rather than
+  // applied flat. See CHECK_SWING_TWO_STRIKE_FACTOR for why that factor
+  // is the lever this rule lives or dies on.
+  const raw = CHECK_SWING_BASE + adj(batter.eye) * CHECK_SWING_EYE_WEIGHT
+  const protecting = count.strikes >= STRIKES_FOR_STRIKEOUT - 1
+  const scaled = protecting ? raw * CHECK_SWING_TWO_STRIKE_FACTOR : raw
+  return Math.min(1, Math.max(0, scaled))
+}
+
+// ============================================================================
 // 3.5 Batted-ball outcome
 // ============================================================================
 
@@ -228,6 +261,8 @@ export interface PitchResolution {
   result:
     | { kind: 'called-strike' }
     | { kind: 'ball' }
+    /** A swing at a pitch out of the zone, held up: counts as a ball. */
+    | { kind: 'check-swing' }
     | { kind: 'foul' }
     | { kind: 'whiff' }
     | { kind: 'in-play'; batted: BattedBallResult }
@@ -262,12 +297,15 @@ export function preparePitch(count: Count, batter: Batter, pitcher: Pitcher, rng
 }
 
 /**
- * Resolve a single pitch given the batter's choice and the p_zone fixed by
- * preparePitch. Does not touch count, bases, outs, or any other game state —
- * that composition happens in the caller (ticket T3).
+ * Resolve a single pitch given the batter's choice, the count, and the
+ * p_zone fixed by preparePitch. The count is needed for the 3.4a check
+ * swing, which is scaled with two strikes. Does not touch count, bases,
+ * outs, or any other game state — that composition happens in the caller
+ * (ticket T3).
  */
 export function resolvePitch(
   choice: Choice,
+  count: Count,
   pZone: number,
   batter: Batter,
   pitcher: Pitcher,
@@ -286,7 +324,17 @@ export function resolvePitch(
     }
   }
 
-  // Contact or Power
+  // Contact or Power.
+  //
+  // A swing at a pitch out of the zone can be checked (3.4a). The roll
+  // happens here, after the location roll and before resolveSwing, and
+  // only on a swing at a ball -- so takes, bunts, and swings at pitches in
+  // the zone draw from the RNG exactly as they did before this rule
+  // existed, and the stream only diverges where the rule can apply.
+  if (location === 'ball' && rngBool(rng, checkSwingProbability(count, batter))) {
+    return { location, result: { kind: 'check-swing' } }
+  }
+
   const swingOutcome = resolveSwing(choice, location, batter, pitcher, rng)
   if (swingOutcome === 'whiff') return { location, result: { kind: 'whiff' } }
   if (swingOutcome === 'foul') return { location, result: { kind: 'foul' } }

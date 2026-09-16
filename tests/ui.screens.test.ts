@@ -84,6 +84,13 @@ describe('number formatting (Season.dc.html)', () => {
     expect(formatRate(0.281)).toBe('.281')
     expect(formatRate(0)).toBe('.000')
   })
+  it('prints OPS at or above 1.000 with the leading digit intact, unlike AVG/OBP which never reach it', () => {
+    // The leading-zero strip is anchored to "0.", so a value >= 1 (a hot
+    // hitter's OPS early in a season) is left alone rather than losing its
+    // "1" the way a naive slice(1) would.
+    expect(formatRate(1.083)).toBe('1.083')
+    expect(formatRate(1)).toBe('1.000')
+  })
   it('prints a signed run differential with a true minus sign', () => {
     expect(formatRunDifferential(14)).toBe('+14')
     expect(formatRunDifferential(-12)).toBe('−12')
@@ -107,11 +114,15 @@ describe('sortBatting', () => {
   it('sorts by home runs descending', () => {
     expect(sortBatting(rows, 'hr')[0].batterId).toBe('a')
   })
-  it('sorts by RBI descending', () => {
-    expect(sortBatting(rows, 'rbi')[0].batterId).toBe('a')
-  })
   it('sorts by OBP, which walks affect but average does not', () => {
     expect(sortBatting(rows, 'obp')[0].batterId).toBe('c')
+  })
+  it('sorts by OPS descending, putting the higher-slugging hitter above a higher-average one', () => {
+    // a: 5 HR in 5 hits over 24 AB gives a 1.042 OPS despite the worst
+    // batting average of the three (.208, last by 'avg' above) -- this is
+    // the whole point of putting OPS on screen instead of leaving AVG to
+    // hide the payoff of a Power swing.
+    expect(sortBatting(rows, 'ops').map((r) => r.batterId)).toEqual(['a', 'c', 'b'])
   })
   it('does not mutate the input', () => {
     const before = rows.map((r) => r.batterId)
@@ -263,6 +274,18 @@ describe('describePitch', () => {
 
   it('says a taken ball was outside, and counts it', () => {
     expect(describePitch({ location: 'ball', kind: 'ball', countBefore: c(1, 2) })).toBe('Taken outside. Ball 2.')
+  })
+
+  it('a checked swing says the swing was held up, not that the pitch was taken', () => {
+    // The count treats a check swing exactly like a ball, but the play line
+    // must not call a swing "Taken outside" -- that misreports what the
+    // player did with the button they pressed.
+    expect(describePitch({ location: 'ball', kind: 'check-swing', countBefore: c(1, 2) })).toBe(
+      'Held up on one out of the zone. Ball 2.'
+    )
+    expect(describePitch({ location: 'ball', kind: 'check-swing', countBefore: c(3, 1) })).toBe(
+      'Held up on one out of the zone. Ball 4.'
+    )
   })
 
   it('distinguishes a swing at a strike from a chase', () => {

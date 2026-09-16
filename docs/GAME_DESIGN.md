@@ -163,6 +163,28 @@ Count rules: ball 4 is a walk; strike 3 (called, whiff, or foul bunt) is a
 strikeout; a foul with two strikes keeps the count. **When a plate
 appearance ends for any reason, the next batter starts at 0-0.**
 
+### 3.4a Check swing
+
+A swing (Contact or Power) at a pitch **out of the zone** may be checked:
+the batter holds up and the pitch counts as a ball. Rolled once, after the
+location roll and before the swing resolves, with probability
+
+```
+clamp(CHECK_SWING_BASE + adj(Eye) * CHECK_SWING_EYE_WEIGHT, 0, 1)
+```
+
+scaled by `CHECK_SWING_TWO_STRIKE_FACTOR` when the batter has two strikes.
+Pitches in the zone are never checked — holding up on a strike is just
+taking a strike, which the Take choice already covers. Bunts are never
+checked, because §3.6 ignores location entirely.
+
+This rule exists to give the Eye rating a second channel. Eye's only other
+effect is the accuracy of the displayed read (§3.3), which is worth
+nothing to a player who ignores the read; measured across its 20–80 range
+Eye was worth about a seventh of what Contact or Power was worth, and
+under an always-Contact policy it was worth exactly zero. See
+`docs/ROADMAP.md` §0.3 and §0.6.
+
 ### 3.5 Batted-ball outcome
 
 When the pitch is in play, roll on the row for the swing that produced it:
@@ -417,14 +439,21 @@ is refused with the "newer version" message.
 ## 7. Tuning targets
 
 Measured by the Phase 1 Monte Carlo script over 10,000 games with the
-opponent policy on both sides (so both teams play "sensibly"), league-wide:
+opponent policy on both sides (so both teams play "sensibly"), league-wide.
+
+**The strikeout band was widened from 20–25% to 22–28% in the Phase A
+retune**, on the owner's decision. The original band was a guess made
+before the game existed; `docs/TUNING.md` records two rounds of trying to
+reach it and what each attempt cost, and a league with a dedicated Power
+swing sits where modern baseball does, near the top of that range. Nothing
+else in this table moved.
 
 | Stat | Target band |
 |---|---|
 | Runs per team per game | 4.2 – 4.9 |
 | Batting average | .245 – .265 |
 | On-base percentage | .315 – .335 |
-| Strikeout rate (per PA) | 20% – 25% |
+| Strikeout rate (per PA) | 22% – 28% |
 | Walk rate (per PA) | 8% – 10% |
 | Home runs per team per game | 1.0 – 1.3 |
 | Pitches per plate appearance | 3.7 – 4.0 |

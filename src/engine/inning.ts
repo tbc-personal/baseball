@@ -257,7 +257,7 @@ export function applyPitch(state: GameState, choice: Choice, teams: Teams, rng: 
   const batter = currentBatter(state, teams)
   const pitcher = currentPitcher(state, teams)
 
-  const pitchResolution = resolvePitch(choice, state.currentPitch.pZone, batter, pitcher, rng)
+  const pitchResolution = resolvePitch(choice, state.count, state.currentPitch.pZone, batter, pitcher, rng)
 
   let count: Count = { ...state.count }
   let bases: Bases = state.bases
@@ -279,6 +279,10 @@ export function applyPitch(state: GameState, choice: Choice, teams: Teams, rng: 
       }
       break
     }
+    // A checked swing is a ball for every purpose the count cares about;
+    // it is a separate kind only so the play line can say what happened
+    // rather than reporting a swing as "Taken outside".
+    case 'check-swing':
     case 'ball': {
       const balls = count.balls + 1
       if (balls >= BALLS_FOR_WALK) {

@@ -44,8 +44,23 @@ export const COUNT_MOD: Record<string, number> = {
  * is, so a low Contact rating raises the chance the pitch is a strike.
  * Tuning lever, range 0.20-0.60. This is the only term in p_zone that
  * depends on the batter.
+ *
+ * Cut from 0.50 to 0.25 in the Phase A retune. At 0.50 the term was
+ * strong enough to decide what the Contact rating *meant*: measured
+ * against the section 5.4 policy, an 80-Contact hitter batted .246 with a
+ * 30.4% strikeout rate against a 20-Contact hitter's .252 and 19.1%,
+ * because the pitcher worked around him, the count-aware policy took, and
+ * the rating cashed out as walks and called strike threes instead of
+ * hits. At 0.25 the same sweep runs .223 / .254 / .284 -- monotonic,
+ * which is the point -- and the walk rate at Contact 80 falls from 24.3%
+ * to 11.7%. Keeping some of the term is deliberate: a dangerous hitter
+ * should still get pitched around a little, and the term is also what
+ * makes the two-strike read depend on who is batting (docs/TUNING.md,
+ * "The two-strike rule change"). Hanging it on Power instead was measured
+ * and rejected -- it moves the inversion onto Power rather than removing
+ * it. See docs/ROADMAP.md 0.4.
  */
-export const CHALLENGE_WEIGHT = 0.5
+export const CHALLENGE_WEIGHT = 0.25
 
 /** Zone probability clamping bounds */
 export const ZONE_CLAMP_MIN = 0.2
@@ -91,6 +106,70 @@ export const PITCH_OUTCOMES: Record<string, [number, number, number]> = {
 // Note: Take choice is deterministic (called strike if zone, ball if ball)
 
 // ============================================================================
+// Section 3.4a: Check swing
+// ============================================================================
+
+/**
+ * A swing at a pitch out of the zone is checked -- held up, so the pitch
+ * is a ball instead of a swing -- with probability
+ *
+ *   CHECK_SWING_BASE + adj(Eye) * CHECK_SWING_EYE_WEIGHT
+ *
+ * clamped to [0, 1]. At the committed values that is 0.00 at Eye 20 (the
+ * formula goes negative below roughly Eye 40 and the clamp is the
+ * intended "no eye, never holds up" floor), 0.10 at Eye 50 and 0.25 at
+ * Eye 80.
+ *
+ * This is the Eye rating's second channel, and it exists because Eye's
+ * only other effect -- the accuracy of the displayed read -- is worth
+ * nothing to a player who ignores the read. Measured across the 20-80
+ * range before this rule, Eye was worth about a seventh of what Contact
+ * or Power was worth (+0.013 of run value against +0.092 and +0.095), and
+ * under an always-Contact policy it was worth exactly zero, because a
+ * policy that ignores the read ignores the rating. With the rule Eye is
+ * worth +0.049, which is the closest the three ratings have been.
+ *
+ * A check swing acts on swings rather than takes, which is why it was
+ * preferred to the obvious alternative of shading borderline called
+ * strikes by Eye: that would have rewarded only taking, and the
+ * always-Take row of the section 7.1 matrix is the one with the least
+ * margin. Measured, this rule leaves always-Take unmoved.
+ *
+ * See docs/ROADMAP.md 0.3, 0.6 and 0.7 for the measurements.
+ */
+export const CHECK_SWING_BASE = 0.1
+export const CHECK_SWING_EYE_WEIGHT = 0.5
+
+/**
+ * Multiplier applied to the check-swing probability with two strikes,
+ * where a batter is protecting the plate rather than choosing whether to
+ * offer. 0 removes the rule with two strikes entirely; 1 makes the count
+ * irrelevant.
+ *
+ * This is the rule's sharpest tuning lever, and it turned out to be
+ * almost free. The valuable check swing is the one that rescues a strike
+ * three, so the factor is most of what the rule is worth to Eye -- but it
+ * costs the league almost nothing, because the at-bats it saves are ones
+ * a batter was losing anyway. Measured across the factor with everything
+ * else held (800 mirror games per point):
+ *
+ *   factor   Eye 20 -> 80 run value   league AVG   league OBP   K rate
+ *   0        +0.015                   .265         .329         26.8%
+ *   0.5      +0.030                   .266         .331         26.6%
+ *   1        +0.047                   .266         .333         26.4%
+ *
+ * Batting average moves a single point across a factor that triples what
+ * the Eye rating is worth, so the committed value is 1. What did push
+ * batting average out of band was the rule existing at all, and that is
+ * paid for in the two ball rows of BATTED_BALL_OUTCOMES rather than here.
+ *
+ * Kept as a constant rather than folded away because it is the first
+ * thing to reach for if a later phase needs the strikeout rate back: at 0
+ * the rule stops erasing strike threes entirely.
+ */
+export const CHECK_SWING_TWO_STRIKE_FACTOR = 1
+
+// ============================================================================
 // Section 3.5: Batted-ball outcome
 // ============================================================================
 
@@ -101,10 +180,23 @@ export const PITCH_OUTCOMES: Record<string, [number, number, number]> = {
  */
 export const BATTED_BALL_OUTCOMES: Record<string, [number, number, number, number, number]> = {
   'contact-zone': [0.5607, 0.3121, 0.0809, 0.0116, 0.0347],
-  'contact-ball': [0.825, 0.14, 0.028, 0.0035, 0.0035],
+  'contact-ball': [0.86, 0.112, 0.0224, 0.0028, 0.0028],
   'power-zone': [0.5422, 0.1635, 0.1308, 0.0109, 0.1526],
-  'power-ball': [0.818, 0.091, 0.049, 0.007, 0.035]
+  'power-ball': [0.88, 0.06, 0.0323, 0.0046, 0.0231]
 }
+
+/**
+ * The two **ball** rows were pushed further toward their minimum-offense
+ * end in the Phase A retune (out 0.825 -> 0.86 for contact, 0.818 -> 0.88
+ * for power, the remainder rescaled in the same proportions). This is
+ * where the check swing (3.4a) is paid for: the rule removes chase swings,
+ * which were mostly outs, so it lifts league batting average about ten
+ * points on its own. Taxing the rows that only a chase can reach charges
+ * that back to the policies doing the chasing rather than to the league --
+ * it also pulled always-Power from 108% of the sim's runs back to 106%,
+ * against a 110% ceiling. Both cells stay inside the 30% bound 7.2 allows
+ * from their 3.5 values.
+ */
 
 /**
  * Rating shift multipliers for batted-ball outcomes.

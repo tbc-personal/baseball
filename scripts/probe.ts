@@ -127,6 +127,11 @@ export interface Variant {
    * Check swing. On a swing at a pitch out of the zone, the batter holds up
    * with probability `checkSwingBase + adj(Eye) * checkSwingEyeWeight` and
    * the pitch is a ball. Zero base and zero weight disables it.
+   *
+   * The variant path applies this at every count, i.e. it assumes
+   * CHECK_SWING_TWO_STRIKE_FACTOR is 1, which is what is committed. If that
+   * factor is ever tuned away from 1, this has to learn about it or the
+   * variants stop being comparable with the baseline.
    */
   checkSwingBase: number
   checkSwingEyeWeight: number
@@ -176,13 +181,14 @@ function checkSwingProbability(variant: Variant, batter: Batter): number {
 function resolveWithVariant(
   variant: Variant,
   choice: Choice,
+  count: Count,
   pZone: number,
   batter: Batter,
   pitcher: Pitcher,
   rng: Rng
 ): ReturnType<typeof resolvePitch> {
   if (variant.checkSwingBase === 0 && variant.checkSwingEyeWeight === 0) {
-    return resolvePitch(choice, pZone, batter, pitcher, rng)
+    return resolvePitch(choice, count, pZone, batter, pitcher, rng)
   }
 
   const location = rollLocation(pZone, rng)
@@ -226,7 +232,7 @@ function playPlateAppearance(
       read = displayedRead(pZone, batter, rng)
     }
 
-    const resolution = resolveWithVariant(variant, policy(read, count, rng), pZone, batter, pitcher, rng)
+    const resolution = resolveWithVariant(variant, policy(read, count, rng), count, pZone, batter, pitcher, rng)
     const kind = resolution.result.kind
 
     if (kind === 'called-strike' || kind === 'whiff') {

@@ -351,7 +351,7 @@ export function gameResultLine(opts: {
  */
 export function describePitch(opts: {
   location: PitchLocation
-  kind: 'called-strike' | 'ball' | 'foul' | 'whiff' | 'in-play' | 'bunt'
+  kind: 'called-strike' | 'ball' | 'check-swing' | 'foul' | 'whiff' | 'in-play' | 'bunt'
   buntResult?: 'sacrifice' | 'foul-bunt' | 'pop-up' | 'bunt-single'
   countBefore: Count
 }): string | null {
@@ -369,6 +369,12 @@ export function describePitch(opts: {
     case 'ball': {
       const balls = countBefore.balls + 1
       return `Taken outside. ${balls >= BALLS_FOR_WALK ? 'Ball 4.' : `Ball ${balls}.`}`
+    }
+    case 'check-swing': {
+      // Deliberately subject-less, like every other line here: the roster
+      // is mixed and the play log never refers to a batter as he or she.
+      const balls = countBefore.balls + 1
+      return `Held up on one out of the zone. ${balls >= BALLS_FOR_WALK ? 'Ball 4.' : `Ball ${balls}.`}`
     }
     case 'whiff':
       return inZone

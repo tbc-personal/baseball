@@ -32,6 +32,12 @@ marked is composed text for the owner to edit. What changed, in one place:
   progression.
 - §5: the reviewer's recommended answer under each open question.
 
+**Revision 4 (Phase A shipped).** Phase A is built, retuned and passing on
+two seeds; §0.8 is the summary and `docs/TUNING.md` "Phase A (round 3)" is
+the measurement record. One finding did not fit in a phase: OPS turns out
+not to track run value in this engine, so putting it on the season screen
+only half-closes §0.1. That is now open question 5.
+
 **Revision 3 (measured).** The rev-2 candidates were measured rather than
 argued about (`npm run probe experiment`, new with this revision), and the
 owner answered §5. Marked `> Measured:` and "(rev 3)". What changed:
@@ -372,6 +378,16 @@ The policy ratios barely move, so the §7.1 matrix should survive — but
 that is a prediction from a no-bases model and the 10,000 × two-seed run
 is what settles it.
 
+> Shipped (rev 4): the direction held, the magnitudes did not. The
+> committed rule is `0.10 + adj(Eye) * 0.50`, not 0.15, and it needed both
+> ball rows of the batted-ball table taxed to pay for it — the check swing
+> removes chase swings, which were mostly outs, and lifts league batting
+> average about ten points on its own. Measured in the real harness rather
+> than the probe, Eye lands at +0.049 and Contact at +0.112. The table
+> below is the probe's prediction; §0.8 and `docs/TUNING.md` carry what
+> actually shipped, and the two differ enough that the probe should be
+> read as a way to rank candidates, never as a forecast of league rates.
+
 **Two things this package does not do.** It does not touch the §0.1
 symptom directly: always-Contact still hits .321 and still beats the sim.
 That is the right order of operations — fix what the ratings mean first,
@@ -383,6 +399,66 @@ retune, not last.
 
 ---
 
+
+### 0.8 Phase A: what shipped, and the one thing it did not fix (rev 4)
+
+Phase A is done. `docs/TUNING.md` "Phase A (round 3)" is the measurement
+record; this is the design summary.
+
+**All eight §7 bands and all five §7.1 matrix rows pass at 10,000 games on
+two seeds** — the first overall PASS the project has recorded. The rating
+spread, the thing §0.3 identified as the real defect, closed from 7.6× to
+about 2×:
+
+| Rating, 20 → 80 | Before | After |
+|---|---|---|
+| Contact | +0.087 | +0.112 |
+| Power | +0.091 | +0.090 |
+| Eye | **+0.013** | **+0.049** |
+
+And the §0.4 inversion is gone: the Contact rating is now monotonic in
+batting average (.223 / .254 / .284 across 20 / 50 / 80) instead of
+peaking in the middle.
+
+What shipped: `CHALLENGE_WEIGHT` 0.50 → 0.25; a check-swing rule (§3.4a)
+giving Eye a second channel; both ball rows of the batted-ball table
+pushed further toward their minimum-offense end to pay for it; the
+strikeout band widened to 22–28%; OPS on the season screen as the default
+sort, replacing RBI; per-policy rate columns on the §7.1 matrix; a CI
+drift guard; and a fix to a pre-existing harness measurement bug (see
+`TUNING.md`, "The mirror-batch selection bias") that had one matrix row
+reporting a walk rate wrong by a factor of three.
+
+**What it did not fix: OPS is not a faithful proxy for run value here, so
+putting it on the screen only half-closes §0.1.**
+
+This was supposed to be the loop closing — the player sorts by OPS, sees
+the thoughtful approach on top, and the visible stat finally agrees with
+the balance metric. It does not, and the reason is structural rather than
+a tuning miss. OPS weights a point of on-base and a point of slugging
+equally; this engine's run value weights on-base roughly twice as heavily.
+An always-Power policy runs about 90 points of slugging above the
+thoughtful play against about 90 points of on-base below it, so the two
+land on top of each other on OPS while differing by five to nine points of
+actual runs:
+
+| Policy | AVG | OBP | SLG | OPS | Runs vs sim |
+|---|---|---|---|---|---|
+| Always Power | .244 | .244 | .567 | **.811** | 104.7% |
+| Take unless Likely strike; Contact 2K | .281 | .333 | .473 | **.806** | **111.8%** |
+
+A gate was built on this and then removed, because it was measuring noise:
+across four check-swing settings the OPS gap between those two policies
+never left ±0.003 while their run difference stayed stable. It survives as
+a reported diagnostic in `npm run tune`, not a band.
+
+So a Power-mashing player will still top their own OPS sort. OPS is a
+large improvement on an AVG-only table — slugging is visible at all now,
+where before it was nowhere — but the honest fix is a run-value-weighted
+number on the season screen, and that is a design decision rather than a
+tuning one. **Parked as an open question for the owner** (§5, question 5).
+
+---
 
 ## 1. Two constraints set the order
 
@@ -429,8 +505,8 @@ replaying.~~
 
 ## 2. The order
 
-### Phase A — Fix the rating economy
-*Features 0.6 above. Engine change, one retune.*
+### Phase A — Fix the rating economy — **DONE (rev 4)**
+*Features 0.6 above. Engine change, one retune. Results in §0.8.*
 
 First because everything after it multiplies the rating economy. Ship
 progression on top of an Eye rating worth 0.013 and you have built a
@@ -440,7 +516,8 @@ after the other phases means retuning all of them a second time.
 
 Exit: `npm run tune` at 10,000 × two seeds, matrix extended with rate
 bands, and `npm run probe ratings` showing all three ratings inside a
-band of each other.
+band of each other. **All three met** — see §0.8. The matrix carries
+reported per-policy rates rather than bands, for the reason in §0.8.
 
 ### Phase B — Pitcher state: fatigue, the pen, and per-inning variance
 *`FUTURE_FEATURES.md` 1, 2 and 4. Engine change, one retune.*
@@ -708,12 +785,15 @@ availability inside a short window, not a health model.
 
 ---
 
-## 5. The four questions, answered
+## 5. The questions
 
-All four are **decided as of rev 3**; the answers are folded into §0–§4
-above and repeated here with the reasoning that produced them. Kept as
-questions rather than rewritten as statements so the next reader can see
-what was traded away.
+The first four are **decided as of rev 3**; the answers are folded into
+§0–§4 above and repeated here with the reasoning that produced them. Kept
+as questions rather than rewritten as statements so the next reader can
+see what was traded away.
+
+**Questions 5 and 6 are open.** Question 5 is new in rev 4: Phase A
+surfaced it and could not settle it.
 
 1. **Is a .300-hitting team the bug, or the fantasy the game is selling?**
    Phase A can make the visible stats honest (batting average tracks run
@@ -754,7 +834,18 @@ what was traded away.
    > **Decided (rev 3): split. D1 in 1.0.0, D2 in 1.1 or later.** See
    > Phase D.
 
-4. **Is "franchise" in scope at all?** Progression without a persistent
+5. **Should the season screen carry a run-value-weighted stat instead of
+   OPS?** New in rev 4, and the one thing Phase A could not fix (§0.8).
+   OPS ranks an always-Power approach level with a thoughtful one while
+   the thoughtful one scores seven points more runs, because OPS weights
+   on-base and slugging equally and this engine does not. The options are
+   to leave OPS (honest about slugging, wrong about value), to weight it
+   (`OBP * 1.8 + SLG`, an OPS+-ish number that needs a name a player will
+   accept), or to show something else entirely. This is a design call
+   about what the game wants the player to optimise, which is why it is
+   here rather than decided.
+
+6. **Is "franchise" in scope at all?** Progression without a persistent
    roster across seasons is a stat that gets thrown away. If the answer is
    no, Phase E shrinks to an end-of-season ratings report and the ledger
    work in §3 is most of it.

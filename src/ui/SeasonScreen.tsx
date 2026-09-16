@@ -9,10 +9,10 @@
 import { useState } from 'preact/hooks'
 import type { BatterStats } from '../engine/types'
 import type { StandingsRow } from '../engine/season'
-import { battingAverage, onBasePercentage } from '../engine/season'
+import { battingAverage, onBasePercentage, sluggingPercentage } from '../engine/season'
 import { formatGamesBack, formatRate, formatRunDifferential } from './format'
 
-export type BattingSortKey = 'avg' | 'hr' | 'rbi' | 'obp' | 'k'
+export type BattingSortKey = 'avg' | 'hr' | 'ops' | 'obp' | 'k'
 
 export interface BattingRow {
   batterId: string
@@ -29,7 +29,11 @@ export interface SeasonScreenProps {
 }
 
 const STANDINGS_GRID = 'minmax(0, 1fr) 30px 30px 36px 44px 56px'
-const BATTING_GRID = 'minmax(0, 1fr) 50px 30px 36px 50px 30px'
+// name | AVG | OBP | HR | OPS | K. The widths follow the content, so
+// reordering the columns means moving these too: AVG and OBP print four
+// characters (".321"), OPS prints five once a hitter clears 1.000, and HR
+// and K are small integers. 200px of fixed track at a 390px viewport.
+const BATTING_GRID = 'minmax(0, 1fr) 46px 46px 28px 52px 28px'
 
 export function sortBatting(rows: BattingRow[], key: BattingSortKey): BattingRow[] {
   const value = (r: BattingRow): number => {
@@ -40,8 +44,8 @@ export function sortBatting(rows: BattingRow[], key: BattingSortKey): BattingRow
         return onBasePercentage(r.stats)
       case 'hr':
         return r.stats.hr
-      case 'rbi':
-        return r.stats.rbi
+      case 'ops':
+        return onBasePercentage(r.stats) + sluggingPercentage(r.stats)
       case 'k':
         return r.stats.k
     }
@@ -50,7 +54,10 @@ export function sortBatting(rows: BattingRow[], key: BattingSortKey): BattingRow
 }
 
 export function SeasonScreen(props: SeasonScreenProps) {
-  const [sortKey, setSortKey] = useState<BattingSortKey>('avg')
+  // Slugging is the entire payoff of the Power swing button, and it only
+  // shows up in OPS -- defaulting the table to AVG hides it and pushes the
+  // player toward optimising for average instead.
+  const [sortKey, setSortKey] = useState<BattingSortKey>('ops')
   const sorted = sortBatting(props.batting, sortKey)
 
   const sortHeader = (key: BattingSortKey, label: string) => (
@@ -149,9 +156,9 @@ export function SeasonScreen(props: SeasonScreenProps) {
         >
           <span style={{ textAlign: 'left' }} />
           {sortHeader('avg', 'AVG')}
-          {sortHeader('hr', 'HR')}
-          {sortHeader('rbi', 'RBI')}
           {sortHeader('obp', 'OBP')}
+          {sortHeader('hr', 'HR')}
+          {sortHeader('ops', 'OPS')}
           {sortHeader('k', 'K')}
         </div>
         {sorted.map((r) => (
@@ -168,9 +175,14 @@ export function SeasonScreen(props: SeasonScreenProps) {
           >
             <span style={{ textAlign: 'left' }}>{r.label}</span>
             <span>{formatRate(battingAverage(r.stats))}</span>
-            <span>{r.stats.hr}</span>
-            <span>{r.stats.rbi}</span>
             <span>{formatRate(onBasePercentage(r.stats))}</span>
+            <span>{r.stats.hr}</span>
+            {/* OPS routinely clears 1.000 for a hot hitter early in a season,
+                unlike AVG/OBP which can't exceed 1. formatRate's leading-zero
+                strip is anchored to "0." so it leaves a value >= 1 alone
+                (e.g. "1.083", not ".083") -- confirmed below, no extra
+                handling needed here. */}
+            <span>{formatRate(onBasePercentage(r.stats) + sluggingPercentage(r.stats))}</span>
             <span>{r.stats.k}</span>
           </div>
         ))}

@@ -17,7 +17,15 @@ import type { PlateAppearanceEvent } from '../src/engine/inning'
 import { opponentChoice } from '../src/engine/sim'
 import { ALL_TEAMS, pitcherForGame } from '../src/engine/season'
 import type { Bases, Choice, Count, GameState, ReadBucket, Team } from '../src/engine/types'
-import { MAX_SEED_VALUE, MAX_PITCHES_PER_GAME } from '../src/engine/constants'
+import {
+  MAX_SEED_VALUE,
+  MAX_PITCHES_PER_GAME,
+  INNINGS_PER_GAME,
+  SLG_SINGLE_WEIGHT,
+  SLG_DOUBLE_WEIGHT,
+  SLG_TRIPLE_WEIGHT,
+  SLG_HR_WEIGHT
+} from '../src/engine/constants'
 
 // ============================================================================
 // Batting policies
@@ -81,10 +89,25 @@ export interface Tally {
   runs: number
   pitches: number
   halfInnings: number
+  /** Total bases (1B=1, 2B=2, 3B=3, HR=4, per the §7 SLG_* weights) -- the numerator of slugging. */
+  totalBases: number
 }
 
 export function emptyTally(): Tally {
-  return { games: 0, teamGames: 0, pa: 0, ab: 0, hits: 0, bb: 0, k: 0, hr: 0, runs: 0, pitches: 0, halfInnings: 0 }
+  return {
+    games: 0,
+    teamGames: 0,
+    pa: 0,
+    ab: 0,
+    hits: 0,
+    bb: 0,
+    k: 0,
+    hr: 0,
+    runs: 0,
+    pitches: 0,
+    halfInnings: 0,
+    totalBases: 0
+  }
 }
 
 const HIT_EVENTS: ReadonlySet<PlateAppearanceEvent> = new Set(['single', 'double', 'triple', 'hr', 'bunt-single'])
@@ -100,12 +123,28 @@ const AB_EVENTS: ReadonlySet<PlateAppearanceEvent> = new Set([
   'bunt-pop-up'
 ])
 
+/**
+ * Total-base weight per hit event, for slugging -- a bunt-single is a
+ * single. Only consulted for events already known to be in HIT_EVENTS, so
+ * every other event (the majority) never pays for the lookup.
+ */
+const TOTAL_BASE_WEIGHTS: Partial<Record<PlateAppearanceEvent, number>> = {
+  single: SLG_SINGLE_WEIGHT,
+  'bunt-single': SLG_SINGLE_WEIGHT,
+  double: SLG_DOUBLE_WEIGHT,
+  triple: SLG_TRIPLE_WEIGHT,
+  hr: SLG_HR_WEIGHT
+}
+
 /** Mutates `tally` in place -- this is a hot loop over tens of millions of pitches. */
 export function foldEvent(tally: Tally, event: PlateAppearanceEvent, runsOnPlay: number): void {
   tally.pa += 1
   tally.runs += runsOnPlay
   if (AB_EVENTS.has(event)) tally.ab += 1
-  if (HIT_EVENTS.has(event)) tally.hits += 1
+  if (HIT_EVENTS.has(event)) {
+    tally.hits += 1
+    tally.totalBases += TOTAL_BASE_WEIGHTS[event] ?? 0
+  }
   if (event === 'hr') tally.hr += 1
   if (event === 'walk') tally.bb += 1
   if (event === 'strikeout') tally.k += 1
@@ -149,14 +188,26 @@ export function playHalfInning(state: GameState, teams: Teams, policies: { home:
   return current
 }
 
-/** Play one whole game, folding every half-inning into `tally` in place. Returns the final state. */
+/**
+ * Play one whole game, folding every half-inning into `tally` in place.
+ * Returns the final state.
+ *
+ * `maxInnings` stops the game after that many innings even if it is tied.
+ * It exists for the mirror batches (see `runBatch`), where a policy that
+ * never puts a ball in play produces scoreless games that run for dozens
+ * of innings and bias every rate stat drawn from them. A truncated game is
+ * only safe to draw **per-PA and per-AB rates** from -- its runs per game
+ * and its final score are meaningless, so nothing that reads those may be
+ * measured with this set.
+ */
 export function playGame(
   homeTeam: Team,
   awayTeam: Team,
   gameIndex: number,
   seed: number,
   policies: { home: Policy; away: Policy },
-  tally: Tally
+  tally: Tally,
+  maxInnings?: number
 ): GameState {
   const homePitcher = pitcherForGame(homeTeam, gameIndex)
   const awayPitcher = pitcherForGame(awayTeam, gameIndex)
@@ -166,6 +217,7 @@ export function playGame(
 
   while (!state.isOver) {
     state = playHalfInning(state, teams, policies, rng, tally)
+    if (maxInnings !== undefined && state.inning > maxInnings) break
   }
   tally.games += 1
   tally.teamGames += 2
@@ -219,6 +271,12 @@ export interface RunOptions {
    * pitches per plate appearance from a mirror batch.
    */
   policy?: Policy
+  /**
+   * Stop each game after this many innings even if it is tied. See
+   * `playGame`: only per-PA and per-AB rates may be read from a batch that
+   * sets this.
+   */
+  maxInnings?: number
 }
 
 export function runBatch(opts: RunOptions): { tally: Tally } {
@@ -230,7 +288,7 @@ export function runBatch(opts: RunOptions): { tally: Tally } {
   for (let g = 0; g < opts.games; g++) {
     const { home, away } = matchupFor(g)
     const gameSeed = drawSeed(seedRng)
-    playGame(home, away, g, gameSeed, { home: policy, away: policy }, tally)
+    playGame(home, away, g, gameSeed, { home: policy, away: policy }, tally, opts.maxInnings)
 
     if (opts.label && ((g + 1) % progressEvery === 0 || g + 1 === opts.games)) {
       process.stderr.write(`[tune] ${opts.label}: ${g + 1}/${opts.games} games\n`)
@@ -301,30 +359,62 @@ export interface MatrixRow {
   /** From the mirror batch (policy on both sides): how a degenerate optimum shows itself. */
   mirrorWalkRate: number
   mirrorPitchesPerPa: number
+  /**
+   * The guard policy's own rate profile, all from the same mirror batch as
+   * mirrorWalkRate/mirrorPitchesPerPa above -- never from the head-to-head,
+   * which folds both policies' events into one scratch tally and so cannot
+   * tell them apart. This is what section 7.1's runs ratio alone can miss:
+   * a policy can sit inside its runs band while its batting average sits
+   * fifty points above the league's, and batting average is what the
+   * season screen actually prints.
+   */
+  mirrorBattingAverage: number
+  mirrorOnBasePercentage: number
+  mirrorSlugging: number
+  mirrorOps: number
+  mirrorStrikeoutRate: number
   pass: boolean
 }
 
 /**
  * Build the full section 7.1 matrix. For each guard policy this runs two
  * batches: a head-to-head against the sim policy (the PASS/FAIL band), and
- * a mirror batch of the policy against itself, whose walk rate and pitches
- * per plate appearance are how a reviewer sees a degenerate optimum -- a
- * policy that walks two times in three is visible in the mirror numbers
- * even before its run ratio is read.
+ * a mirror batch of the policy against itself, whose walk rate, pitches
+ * per plate appearance, and full rate profile (AVG/OBP/SLG/OPS/K%) are how
+ * a reviewer sees a degenerate optimum -- a policy that walks two times in
+ * three, or hits fifty points over the league average, is visible in the
+ * mirror numbers even before its run ratio is read.
  */
 export function runPolicyMatrix(games: number, baseSeed: number, verbose = false): MatrixRow[] {
   return MATRIX_POLICIES.map((entry, i) => {
     const head = runPolicyMatchup(entry.policy, games, baseSeed + i * 2, verbose ? `matrix: ${entry.label}` : '')
+    // Capped at regulation. Without the cap, a policy that never puts a
+    // ball in play produces scoreless games on both sides that run for
+    // dozens of innings -- measured, always-Take mirror games averaged 76
+    // innings against a normal game's 9 -- and the matchups that drag on
+    // longest are exactly the high-strike, low-walk ones, so every rate
+    // drawn from the batch is biased toward them. Uncapped, always-Take
+    // measured a 10% walk rate against a true per-PA rate near 20%. Only
+    // per-PA and per-AB rates are read from this batch, so truncating a
+    // tied game costs nothing; the runs verdict comes from `head`, which
+    // is uncapped and does not degenerate because the sim side scores.
     const mirror = runBatch({
       games,
       baseSeed: baseSeed + i * 2 + 1,
       label: verbose ? `mirror: ${entry.label}` : '',
-      policy: entry.policy
+      policy: entry.policy,
+      maxInnings: INNINGS_PER_GAME
     })
 
     const simRate = head.simRuns / head.simTeamGames
     const policyRate = head.policyRuns / head.policyTeamGames
     const ratio = simRate > 0 ? policyRate / simRate : Number.POSITIVE_INFINITY
+
+    // Same OBP shape as buildRows: (H + BB) / (AB + BB) -- ignores sacrifice
+    // flies/bunts in the denominator, same simplification §7 uses. Not the
+    // same denominator as strikeout rate below, which is per PA.
+    const mirrorOnBasePercentage = (mirror.tally.hits + mirror.tally.bb) / (mirror.tally.ab + mirror.tally.bb)
+    const mirrorSlugging = mirror.tally.totalBases / mirror.tally.ab
 
     return {
       label: entry.label,
@@ -336,6 +426,11 @@ export function runPolicyMatrix(games: number, baseSeed: number, verbose = false
       policyRate,
       mirrorWalkRate: mirror.tally.bb / mirror.tally.pa,
       mirrorPitchesPerPa: mirror.tally.pitches / mirror.tally.pa,
+      mirrorBattingAverage: mirror.tally.hits / mirror.tally.ab,
+      mirrorOnBasePercentage,
+      mirrorSlugging,
+      mirrorOps: mirrorOnBasePercentage + mirrorSlugging,
+      mirrorStrikeoutRate: mirror.tally.k / mirror.tally.pa,
       pass: ratio >= entry.min && ratio <= entry.max
     }
   })
@@ -372,12 +467,55 @@ export function buildRows(t: Tally): Row[] {
     { label: 'Runs per team per game', value: t.runs / t.teamGames, min: 4.2, max: 4.9, format: fmtRuns },
     { label: 'Batting average', value: t.hits / t.ab, min: 0.245, max: 0.265, format: fmtAvg },
     { label: 'On-base percentage', value: (t.hits + t.bb) / (t.ab + t.bb), min: 0.315, max: 0.335, format: fmtAvg },
-    { label: 'Strikeout rate (per PA)', value: t.k / t.pa, min: 0.2, max: 0.25, format: fmtPct },
+    { label: 'Strikeout rate (per PA)', value: t.k / t.pa, min: 0.22, max: 0.28, format: fmtPct },
     { label: 'Walk rate (per PA)', value: t.bb / t.pa, min: 0.08, max: 0.1, format: fmtPct },
     { label: 'Home runs per team per game', value: t.hr / t.teamGames, min: 1.0, max: 1.3, format: fmtRuns },
     { label: 'Pitches per plate appearance', value: t.pitches / t.pa, min: 3.7, max: 4.0, format: fmtRuns },
     { label: 'Plate appearances per half-inning', value: t.pa / t.halfInnings, min: 4.1, max: 4.5, format: fmtRuns }
   ]
+}
+
+/**
+ * The visible-stats check.
+ *
+ * Section 7.1 bands runs, and runs alone. That is what let a one-button
+ * policy sit inside its band while producing the best-looking season on
+ * the screen the player actually reads: measured before the Phase A
+ * retune, always-Contact hit .316 against a league .255 and passed at
+ * 96.8% of the sim's runs.
+ *
+ * The design intent is that reading the pitcher is the best way to play,
+ * and OPS is where the player would have to see it, because OPS is what
+ * the season screen sorts by.
+ *
+ * Measured, OPS cannot carry that job, which is why this is a diagnostic
+ * and not a band. OPS weights a point of on-base and a point of slugging
+ * equally; this engine's run value does not. An always-Power policy runs
+ * about 90 points of slugging above the thoughtful play against about 90
+ * points of on-base below it, so the two land within noise of each other
+ * on OPS -- measured across four check-swing settings the gap never left
+ * +-0.003 -- while the same two policies differ by five to nine points of
+ * actual runs. `pass` is reported for the reader's information; nothing
+ * gates on it, and it should not, until the season screen carries a stat
+ * that tracks run value rather than OPS.
+ */
+export interface VisibleStatsCheck {
+  pass: boolean
+  intended: MatrixRow
+  best: MatrixRow
+  margin: number
+}
+
+export function checkVisibleStats(matrix: MatrixRow[]): VisibleStatsCheck {
+  const intended = matrix[matrix.length - 1]
+  const others = matrix.slice(0, -1)
+  const best = others.reduce((a, b) => (b.mirrorOps > a.mirrorOps ? b : a))
+  return {
+    pass: intended.mirrorOps > best.mirrorOps,
+    intended,
+    best,
+    margin: intended.mirrorOps - best.mirrorOps
+  }
 }
 
 export function rowPasses(row: Row): boolean {

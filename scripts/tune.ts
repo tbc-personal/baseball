@@ -21,7 +21,17 @@
  * measurement.
  */
 
-import { buildRows, directionNote, fmtPct, fmtRuns, rowPasses, runBatch, runPolicyMatrix } from './tune-lib'
+import {
+  buildRows,
+  checkVisibleStats,
+  directionNote,
+  fmtAvg,
+  fmtPct,
+  fmtRuns,
+  rowPasses,
+  runBatch,
+  runPolicyMatrix
+} from './tune-lib'
 import type { MatrixRow } from './tune-lib'
 
 // ============================================================================
@@ -74,11 +84,16 @@ function printMatrix(matrix: MatrixRow[]): boolean {
     pad('Policy', labelWidth) +
       padLeft('Runs vs sim', 13) +
       padLeft('Band', 14) +
+      padLeft('AVG', 7) +
+      padLeft('OBP', 7) +
+      padLeft('SLG', 7) +
+      padLeft('OPS', 7) +
+      padLeft('K%', 8) +
       padLeft('Walk%', 9) +
       padLeft('P/PA', 7) +
       '  Result'
   )
-  console.log('-'.repeat(labelWidth + 13 + 14 + 9 + 7 + 10))
+  console.log('-'.repeat(labelWidth + 13 + 14 + 7 + 7 + 7 + 7 + 8 + 9 + 7 + 10))
   let allPass = true
   for (const row of matrix) {
     if (!row.pass) allPass = false
@@ -86,14 +101,22 @@ function printMatrix(matrix: MatrixRow[]): boolean {
       pad(row.label, labelWidth) +
         padLeft(fmtPct(row.ratio), 13) +
         padLeft(bandLabel(row), 14) +
+        padLeft(fmtAvg(row.mirrorBattingAverage), 7) +
+        padLeft(fmtAvg(row.mirrorOnBasePercentage), 7) +
+        padLeft(fmtAvg(row.mirrorSlugging), 7) +
+        padLeft(fmtAvg(row.mirrorOps), 7) +
+        padLeft(fmtPct(row.mirrorStrikeoutRate), 8) +
         padLeft(fmtPct(row.mirrorWalkRate), 9) +
         padLeft(fmtRuns(row.mirrorPitchesPerPa), 7) +
         `  ${row.pass ? 'PASS' : 'FAIL'}`
     )
   }
   console.log('')
-  console.log('Walk% and P/PA are from a mirror batch (the policy on both sides), not the head-to-head:')
-  console.log('they are how a degenerate optimum shows itself -- a policy that walks most of the time.')
+  console.log('AVG/OBP/SLG/OPS/K%/Walk%/P/PA are all from a mirror batch (the policy on both sides), not')
+  console.log('the head-to-head -- runPolicyMatchup folds both sides into one tally, so it cannot give a')
+  console.log('single policy its own rates. They are how a degenerate optimum shows itself: a policy that')
+  console.log('walks most of the time, or one that sits inside its runs band while hitting far above the')
+  console.log('league average -- which is what the season screen actually prints.')
   return allPass
 }
 
@@ -126,6 +149,28 @@ function main(): void {
   console.log(
     `\n(each row: ${GAMES} head-to-head games, the guard policy alternating home and away per game,\n` +
       ` plus ${GAMES} mirror games of the policy against itself for the walk / pitches-per-PA columns)`
+  )
+
+  // --------------------------------------------------------------------
+  // Visible-stats check: does the thoughtful policy win on the season screen?
+  // --------------------------------------------------------------------
+  const visible = checkVisibleStats(matrix)
+  console.log('\n=== Visible-stats diagnostic (OPS, the season screen\'s default sort) ===\n')
+  console.log(
+    `Reported, not banded. OPS weights a point of on-base and a point of slugging\n` +
+      `equally; this engine's run value does not -- on-base is worth roughly twice as\n` +
+      `much. So an always-Power policy can match the thoughtful play on OPS while\n` +
+      `scoring materially fewer runs, and it does. Read this next to the runs column,\n` +
+      `which is what section 7.1 actually bands.\n`
+  )
+  console.log(`  intended:  ${visible.intended.label}`)
+  console.log(`             OPS ${fmtAvg(visible.intended.mirrorOps)}`)
+  console.log(`  best other: ${visible.best.label}`)
+  console.log(`             OPS ${fmtAvg(visible.best.mirrorOps)}`)
+  console.log(`  margin:    ${visible.margin >= 0 ? '+' : ''}${visible.margin.toFixed(3)}`)
+  console.log(
+    `\n  A negative margin is not a failure on its own -- check the runs column for\n` +
+      `  that policy before reading anything into it.`
   )
 
   // --------------------------------------------------------------------

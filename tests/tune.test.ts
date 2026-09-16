@@ -22,6 +22,14 @@ describe('tune-lib measurement harness self-consistency', () => {
     expect(tally.hits).toBeLessThanOrEqual(tally.ab)
   })
 
+  it('total bases is at least one per hit and at most a home run for every hit', () => {
+    const { tally } = runBatch({ games: TEST_GAMES, baseSeed: TEST_SEED, label: '' })
+    // Every hit is worth 1-4 total bases (SLG_SINGLE_WEIGHT..SLG_HR_WEIGHT),
+    // so the sum sits between "all singles" and "all home runs".
+    expect(tally.totalBases).toBeGreaterThanOrEqual(tally.hits)
+    expect(tally.totalBases).toBeLessThanOrEqual(tally.hits * 4)
+  })
+
   it('home runs never exceed hits, and hits never exceed PA', () => {
     const { tally } = runBatch({ games: TEST_GAMES, baseSeed: TEST_SEED, label: '' })
     expect(tally.hr).toBeLessThanOrEqual(tally.hits)
@@ -136,6 +144,19 @@ describe('section 7.1 policy matrix', () => {
       expect(row.mirrorWalkRate).toBeLessThanOrEqual(1)
       expect(row.mirrorPitchesPerPa).toBeGreaterThanOrEqual(1)
       expect(row.pass).toBe(row.ratio >= row.min && row.ratio <= row.max)
+
+      // Rate-profile fields, all from the mirror batch: every rate is
+      // finite and lands in a generous [0, 5] sanity range (OPS in
+      // particular can exceed 1, but nowhere near 5), and slugging can
+      // never be below batting average since every hit is worth at least
+      // one base. OPS is defined as OBP + SLG, not independently measured.
+      for (const value of [row.mirrorBattingAverage, row.mirrorOnBasePercentage, row.mirrorSlugging, row.mirrorOps, row.mirrorStrikeoutRate]) {
+        expect(Number.isFinite(value)).toBe(true)
+        expect(value).toBeGreaterThanOrEqual(0)
+        expect(value).toBeLessThanOrEqual(5)
+      }
+      expect(row.mirrorSlugging).toBeGreaterThanOrEqual(row.mirrorBattingAverage)
+      expect(row.mirrorOps).toBeCloseTo(row.mirrorOnBasePercentage + row.mirrorSlugging, 10)
     }
   })
 

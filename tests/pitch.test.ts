@@ -11,7 +11,8 @@ import {
   resolveBunt,
   isBuntAvailable,
   preparePitch,
-  resolvePitch
+  resolvePitch,
+  checkSwingProbability
 } from '../src/engine/pitch'
 import {
   COUNT_MOD,
@@ -25,9 +26,12 @@ import {
   READ_BUCKET_LIKELY_STRIKE,
   PITCH_OUTCOMES,
   BATTED_BALL_OUTCOMES,
-  BUNT_OUTCOMES
+  BUNT_OUTCOMES,
+  CHECK_SWING_BASE,
+  CHECK_SWING_EYE_WEIGHT
 } from '../src/engine/constants'
 
+const FRESH: Count = { balls: 0, strikes: 0 }
 const SAMPLES = 100_000
 const TOLERANCE = 0.005
 
@@ -409,6 +413,103 @@ describe('isBuntAvailable', () => {
   })
 })
 
+describe('checkSwingProbability (section 3.4a)', () => {
+  it('is the base plus adj(Eye) scaled by the weight', () => {
+    expect(checkSwingProbability(FRESH, makeBatter({ eye: 50 }))).toBeCloseTo(CHECK_SWING_BASE, 10)
+    // Clamped to [0, 1]: at the committed constants the Eye-20 end is
+    // negative before clamping, which is the intended "no eye, never holds
+    // up" floor rather than an accident.
+    const unclamped = (eye: number) => CHECK_SWING_BASE + adj(eye) * CHECK_SWING_EYE_WEIGHT
+    const clamped = (eye: number) => Math.min(1, Math.max(0, unclamped(eye)))
+    expect(checkSwingProbability(FRESH, makeBatter({ eye: 80 }))).toBeCloseTo(clamped(80), 10)
+    expect(checkSwingProbability(FRESH, makeBatter({ eye: 20 }))).toBeCloseTo(clamped(20), 10)
+  })
+
+  it('rises with Eye', () => {
+    expect(checkSwingProbability(FRESH, makeBatter({ eye: 80 }))).toBeGreaterThan(
+      checkSwingProbability(FRESH, makeBatter({ eye: 50 }))
+    )
+    expect(checkSwingProbability(FRESH, makeBatter({ eye: 50 }))).toBeGreaterThanOrEqual(
+      checkSwingProbability(FRESH, makeBatter({ eye: 20 }))
+    )
+  })
+
+  it('never leaves [0, 1], whatever the constants are tuned to', () => {
+    for (const eye of [0, 20, 50, 80, 100]) {
+      const p = checkSwingProbability(FRESH, makeBatter({ eye }))
+      expect(p).toBeGreaterThanOrEqual(0)
+      expect(p).toBeLessThanOrEqual(1)
+    }
+  })
+})
+
+describe('check swing inside resolvePitch (section 3.4a)', () => {
+  const pitcher = makePitcher()
+
+  // pZone 0 forces every pitch out of the zone; pZone 1 forces every pitch in.
+  const swingOutcomes = (choice: 'Contact' | 'Power', pZone: number, batter: Batter, count: Count = FRESH) => {
+    let checked = 0
+    for (let seed = 0; seed < SAMPLES; seed++) {
+      if (resolvePitch(choice, count, pZone, batter, pitcher, makeRng(seed)).result.kind === 'check-swing') checked += 1
+    }
+    return checked / SAMPLES
+  }
+
+  it('a swing at a pitch out of the zone is checked at the rated probability', () => {
+    for (const choice of ['Contact', 'Power'] as const) {
+      const batter = makeBatter({ eye: 80 })
+      expect(swingOutcomes(choice, 0, batter)).toBeCloseTo(checkSwingProbability(FRESH, batter), 2)
+    }
+  })
+
+  it('a pitch in the zone is never checked', () => {
+    for (const choice of ['Contact', 'Power'] as const) {
+      expect(swingOutcomes(choice, 1, makeBatter({ eye: 80 }))).toBe(0)
+    }
+  })
+
+  it('a batter at the bottom of the Eye range never checks', () => {
+    // The formula goes negative below roughly Eye 40 at the committed
+    // constants and clamps to zero: no eye, never holds up.
+    expect(checkSwingProbability(FRESH, makeBatter({ eye: 20 }))).toBe(0)
+    expect(swingOutcomes('Contact', 0, makeBatter({ eye: 20 }))).toBe(0)
+  })
+
+  it('is unavailable with two strikes: the batter has to protect the plate', () => {
+    const sharp = makeBatter({ eye: 80 })
+    expect(checkSwingProbability({ balls: 0, strikes: 2 }, sharp)).toBe(0)
+    expect(checkSwingProbability({ balls: 3, strikes: 2 }, sharp)).toBe(0)
+    expect(swingOutcomes('Power', 0, sharp, { balls: 0, strikes: 2 })).toBe(0)
+    // ...but it is available at one strike.
+    expect(checkSwingProbability({ balls: 0, strikes: 1 }, sharp)).toBeGreaterThan(0)
+  })
+
+  it('Take out of the zone is still a plain ball, not a check swing', () => {
+    for (let seed = 0; seed < 200; seed++) {
+      expect(resolvePitch('Take', FRESH, 0, makeBatter({ eye: 80 }), pitcher, makeRng(seed)).result.kind).toBe('ball')
+    }
+  })
+
+  it('Bunt is never a check swing (section 3.6 ignores location entirely)', () => {
+    for (let seed = 0; seed < 200; seed++) {
+      expect(resolvePitch('Bunt', FRESH, 0, makeBatter({ eye: 80 }), pitcher, makeRng(seed)).result.kind).toBe('bunt')
+    }
+  })
+
+  it('leaves the rng stream alone where the rule cannot apply', () => {
+    // A swing at a pitch in the zone draws location + swing (+ batted ball),
+    // exactly as it did before the rule existed: a high-Eye and a low-Eye
+    // batter with the same Contact/Power resolve identically in the zone.
+    const sharp = makeBatter({ eye: 80 })
+    const blind = makeBatter({ eye: 20 })
+    for (let seed = 0; seed < 200; seed++) {
+      expect(resolvePitch('Power', FRESH, 1, sharp, pitcher, makeRng(seed))).toEqual(
+        resolvePitch('Power', FRESH, 1, blind, pitcher, makeRng(seed))
+      )
+    }
+  })
+})
+
 describe('preparePitch / resolvePitch', () => {
   const batter: Batter = { id: 'b', name: 'B', position: 'CF', contact: 50, power: 50, eye: 50 }
   const pitcher: Pitcher = { id: 'p', name: 'P', control: 50, stuff: 50, tendency: 'Neutral' }
@@ -421,20 +522,20 @@ describe('preparePitch / resolvePitch', () => {
 
   it('Take is a called strike in the zone and a ball otherwise', () => {
     // pZone 1 forces the zone, pZone 0 forces a ball.
-    expect(resolvePitch('Take', 1, batter, pitcher, makeRng(1)).result.kind).toBe('called-strike')
-    expect(resolvePitch('Take', 0, batter, pitcher, makeRng(1)).result.kind).toBe('ball')
+    expect(resolvePitch('Take', FRESH, 1, batter, pitcher, makeRng(1)).result.kind).toBe('called-strike')
+    expect(resolvePitch('Take', FRESH, 0, batter, pitcher, makeRng(1)).result.kind).toBe('ball')
   })
 
   it('Bunt always resolves to a bunt result', () => {
     for (let seed = 0; seed < 50; seed++) {
-      const res = resolvePitch('Bunt', 0.5, batter, pitcher, makeRng(seed))
+      const res = resolvePitch('Bunt', FRESH, 0.5, batter, pitcher, makeRng(seed))
       expect(res.result.kind).toBe('bunt')
     }
   })
 
   it('is deterministic for a given rng state', () => {
-    const a = resolvePitch('Power', 0.55, batter, pitcher, makeRng(42))
-    const b = resolvePitch('Power', 0.55, batter, pitcher, makeRng(42))
+    const a = resolvePitch('Power', FRESH, 0.55, batter, pitcher, makeRng(42))
+    const b = resolvePitch('Power', FRESH, 0.55, batter, pitcher, makeRng(42))
     expect(a).toEqual(b)
   })
 
@@ -443,14 +544,14 @@ describe('preparePitch / resolvePitch', () => {
     const play = (from: number) => {
       const rng = makeRng(from)
       const preview = preparePitch(count, batter, pitcher, rng)
-      const resolution = resolvePitch('Power', preview.pZone, batter, pitcher, rng)
+      const resolution = resolvePitch('Power', FRESH, preview.pZone, batter, pitcher, rng)
       return { preview, resolution }
     }
 
     // Play two pitches, then snapshot the state as a mid-at-bat save would.
     const rng = makeRng(7)
     preparePitch(count, batter, pitcher, rng)
-    resolvePitch('Contact', 0.55, batter, pitcher, rng)
+    resolvePitch('Contact', FRESH, 0.55, batter, pitcher, rng)
     const saved = rng.state()
 
     expect(play(saved)).toEqual(play(saved))
