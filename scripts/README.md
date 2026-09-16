@@ -89,3 +89,57 @@ The reusable harness (`playGame`, `runBatch`, `runPolicyMatchup`,
 `runPolicyMatrix`, the five `MATRIX_POLICIES`, the §7 row builder) that both `scripts/tune.ts` and `tests/tune.test.ts` import.
 Split out purely so the test can run a handful of games without pulling in
 the CLI's default 10,000-game run.
+
+---
+
+# scripts/probe.ts
+
+Per-batter measurement. `tune.ts` reports league-wide rate stats and each
+§7.1 policy's *runs*; neither can see what a single rating or a single
+choice is worth to one hitter, and the §7.1 matrix bands runs only. A
+policy can sit comfortably inside its runs band while hitting fifty points
+above the league average — which is what always-Contact does, and batting
+average is what the season screen prints.
+
+This script isolates the plate appearance: one batter, one policy, against
+the twelve-pitcher opponent pool, with no bases, outs or lineup. It never
+writes constants.
+
+```
+npm run probe                        # mode "policies", 40,000 PA per line
+npm run probe -- ratings 60000       # mode, PA count
+npm run probe -- challenge 40000 777 # mode, PA count, base seed
+```
+
+## Modes
+
+- **`policies`** — every §7.1 guard policy, plus the two a human actually
+  plays, against the real Herons roster and a 50/50/50 control. Answers
+  "which button pays, and in which stat".
+- **`ratings`** — one rating swept 20–80 with the other two pinned at 50,
+  under three policies. Answers "is this rating worth anything".
+- **`challenge`** — `CHALLENGE_WEIGHT` swept against the Contact rating.
+  §3.2's challenge term is the only batter-dependent term in `p_zone`, and
+  it is strong enough to decide what the Contact rating *means*: whether a
+  good contact hitter gets hits or gets pitched around. This mode is the
+  measurement for that question, and it is the one place the script
+  recomputes `p_zone` itself rather than calling `zoneProbability`, so the
+  weight can vary without editing `constants.ts`. If §3.2's formula
+  changes, `zoneProbabilityWith` has to change with it.
+
+## The "run val" column
+
+Static linear weights (BB .69, 1B .89, 2B 1.27, 3B 1.62, HR 2.10), not
+derived from this engine's base running. It is a fixed yardstick for
+ranking one choice against another *within a run*. It is not comparable
+with the §7 run-per-game targets and should never be quoted as one.
+
+## Reproducing the numbers in docs/ROADMAP.md
+
+```
+npm run probe -- policies 40000
+npm run probe -- ratings 60000
+npm run probe -- challenge 40000
+```
+
+All three at the default base seed `20260401`.

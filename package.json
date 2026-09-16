@@ -9,7 +9,8 @@
     "test": "vitest run",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "tune": "vite-node scripts/tune.ts"
+    "tune": "vite-node scripts/tune.ts",
+    "probe": "vite-node scripts/probe.ts"
   },
   "dependencies": {
     "preact": "^10.22.0"

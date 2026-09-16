@@ -20,10 +20,15 @@ npm run typecheck  # tsc --noEmit
 npm run build    # typecheck, then build to dist/
 npm run preview  # serve the built dist/ locally
 npm run tune     # play 10,000 simulated games and print league averages
+npm run probe    # per-batter measurement: what each rating and each button buys
 ```
 
 `npm run tune` is the Monte Carlo harness used to balance the game. It
 takes an optional game count and seed: `npm run tune -- 2000 777`.
+
+`npm run probe` measures a single plate appearance in isolation — what one
+rating or one choice is worth — which is the question `tune` cannot answer.
+It takes a mode, a PA count and a seed: `npm run probe -- ratings 60000`.
 
 ## How it is built
 
@@ -58,6 +63,8 @@ warns you if it is older than the save already on that device.
   base running, rosters, persistence format, and the tuning targets
 - [docs/TUNING.md](docs/TUNING.md) — what the constants were tuned to, what
   changed and why, and the one §7 target that could not be met
+- [docs/ROADMAP.md](docs/ROADMAP.md) — what to build next and in what
+  order, and the measured balance problem that sets that order
 - [docs/BUILD_NOTES.md](docs/BUILD_NOTES.md) — build status, deviations from
   the spec, resolved ambiguities and known gaps
 - [docs/mockups/](docs/mockups/) — the five screen mockups used as the
