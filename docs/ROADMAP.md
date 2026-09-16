@@ -32,6 +32,26 @@ marked is composed text for the owner to edit. What changed, in one place:
   progression.
 - §5: the reviewer's recommended answer under each open question.
 
+**Revision 3 (measured).** The rev-2 candidates were measured rather than
+argued about (`npm run probe experiment`, new with this revision), and the
+owner answered §5. Marked `> Measured:` and "(rev 3)". What changed:
+
+- §0.1 and §0.2: the reviewer's two factual corrections verified and taken.
+  One of them (OBP is on the season screen) makes the case sharper, not
+  weaker.
+- §0.4: **challenge-on-Power tested and rejected.** It fixes the Contact
+  rating by inverting the Power rating. A third option, hanging the term
+  on mean threat, was tested and also rejected. Lowering the weight on
+  Contact remains the best of the three.
+- §0.6: **check swing tested and adopted**, at the reviewer's exact
+  numbers. It is the single largest lever measured here.
+- §0.7 (new): the recommended Phase A package, with the measured table.
+- §1: the save constraint is struck. The reviewer was right; the evidence
+  is now cited.
+- §2, §5: the owner's decisions recorded — widen the strikeout band, split
+  Phase D, keep career mode alive as a later release.
+- §3: the CI regression sized against a measured drift figure.
+
 ---
 
 ## 0. The balance problem comes first, and it is not the one we thought
@@ -51,6 +71,17 @@ converted into a walk rating.**
 > So the balance problem is not "the read does not pay". It is the two
 > rating defects in §0.3 and §0.4: one rating does nothing, one does the
 > wrong thing. Fix those and keep the .311 as the symptom to re-measure.
+
+> Measured (rev 3): taken. The probe understates OBP-heavy policies
+> because team run scoring is convex in on-base — a walk with two on is
+> worth more than the static weight — and the probe has no bases. The
+> matrix's 13 points is the better number for "does reading pay", and
+> this document should not have leaned on 0.333 against 0.330 for that
+> question. What those two numbers *do* still establish, and what the
+> matrix independently confirms (always-Contact 97.7%, always-Power
+> 103.1%), is the §0.1 finding: **Contact and Power are worth the same and
+> look completely different.** That was the owner's original complaint and
+> it survives the correction.
 
 All numbers below come from `npm run probe`, added with this document. It
 isolates one plate appearance — one batter, one policy, the twelve-pitcher
@@ -95,6 +126,15 @@ opposing starter — is charged to a ledger nobody can see.
 > pitches per plate appearance. Always-Contact at 2.25 turns a half-inning
 > into about ten taps. That is the quiet way a one-button policy makes the
 > game boring, and it is worth banding in §0.6 item 1.
+
+> Measured (rev 3): correct, and it sharpens the claim rather than
+> softening it. `SeasonScreen.tsx` prints AVG, HR, RBI, OBP and K, sorted
+> by AVG. **There is no SLG column.** So the one thing the screen cannot
+> show is the entire payoff of the Power button — a double is invisible,
+> and only the HR column catches the top of it. That is the precise
+> version of "the feedback channel disagrees with the balance metric", and
+> it is why §0.6 item 5 is not cosmetic. The P/PA catch is right and is
+> now item 1's floor.
 
 **The tuning process and the game's feedback channel disagree about what
 winning looks like.** That is the bug. Either the visible stats have to
@@ -170,6 +210,33 @@ Somewhere around 0.20–0.25, Contact starts behaving like a contact rating.
 > thing to confirm first with `npm run probe challenge` adapted to sweep
 > Power.
 
+> Measured (rev 3): **tested and rejected.** `npm run probe experiment`
+> hangs the term on Power, on Contact at a lower weight, and on mean
+> threat `(Contact + Power) / 2`, and scores each on what the three
+> ratings are worth. Hanging it on Power does fix Contact — batting
+> average under the sim policy goes .195 / .257 / .327 across Contact
+> 20 / 50 / 80, exactly the shape we want — but it moves the inversion
+> rather than removing it. **Power then inverts: .287 at Power 20 against
+> .247 at Power 80**, and Power's value across its range falls from +0.091
+> to +0.053 while Contact's rises to +0.141. That is a 2.7× gap between
+> the two ratings, worse than the 1.05× the committed engine has. The
+> reasoning was sound baseball; the term is simply too strong to hang on
+> any single rating, because whichever rating carries it gets paid in
+> walks instead of its own currency.
+>
+> Mean threat, which is the version this document proposed in reply and
+> which splits the penalty across both, is also rejected: Contact +0.123,
+> Power +0.083, and it drags Power down without making Contact behave any
+> better than the simpler option below.
+>
+> **Lowering the weight on Contact wins.** At `CHALLENGE_WEIGHT` 0.25,
+> Contact goes .223 / .254 / .284 across 20 / 50 / 80 under the sim policy
+> — monotonic, which is the whole point — its walk rate at Contact 80
+> drops from 24.3% to 11.7%, and Power is untouched at +0.090 against
+> Contact's +0.112. Keeping some of the term is right: a great contact
+> hitter *should* get pitched around a little. 0.50 was just too much of
+> it.
+
 **This cannot be changed on its own.** `TUNING.md` is explicit that the
 challenge term at 0.50 is half of what unbroke the two-strike read — at
 the old count modifiers every two-strike read was `Likely ball` for every
@@ -199,11 +266,14 @@ In rough confidence order:
    a floor (always-Contact at 2.25 is the one to catch). Cheapest change
    here, no engine risk, and it is what catches the next one of these. Do
    it first, and wire the small-N version into CI (§3).
-2. **Rebalance the challenge term against the count modifiers** so Contact
-   raises batting average rather than walk rate, and re-derive the
-   two-strike read table (`TUNING.md` has the shape of that table).
-   Probably `CHALLENGE_WEIGHT` toward 0.25 and `CONTACT_SHIFT_OUT` up from
-   0.5 — both to be measured, not assumed.
+2. **Cut `CHALLENGE_WEIGHT` from 0.50 to 0.25** (rev 3: measured, §0.4)
+   so Contact raises batting average rather than walk rate, and re-derive
+   the two-strike read table — `TUNING.md` has the shape of that table,
+   and this is the one step of Phase A that can re-open the problem the
+   challenge term was introduced to fix. Leave `CONTACT_SHIFT_OUT` at 0.5
+   until the retune says otherwise; at 0.25 the Contact rating already
+   carries +0.112 against Power's +0.090, so there is no shortfall left
+   to fill.
 3. **Give Eye a second channel that works under every policy.** Read
    accuracy alone cannot carry a rating, because a player who ignores the
    read zeroes it out. Pitch-location visibility scaled by Eye (Phase C)
@@ -221,6 +291,19 @@ In rough confidence order:
    > strikes by Eye, rewards only taking and would widen the always-Take
    > margin that is already at 57.6% against a 60% ceiling.
 
+   > Measured (rev 3): **adopted, at these exact numbers.** It is the
+   > largest single lever measured in this document. Eye's value across
+   > its range goes from **+0.012 to +0.057**, which moves it from "does
+   > nothing" to within reach of Contact and Power. The weaker variant
+   > tried alongside it (`0.10 + adj(Eye) * 0.25`) only reaches +0.028,
+   > so the magnitude is doing real work and should not be trimmed
+   > pre-emptively. Two side effects, both checked: always-Take is
+   > unmoved (0.157 against 0.156 — the rule acts on swings, so the
+   > reviewer's argument for preferring it over called-strike shading
+   > holds), and league offense rises about 5%, which the Phase A retune
+   > absorbs. It does **not** fix the §0.4 inversion; the two changes are
+   > orthogonal and Phase A needs both.
+
 4. **Take the strikeout band decision.** 27.9% against a 20–25% target,
    and `TUNING.md` says the two honest options are a further §3.2 change
    or widening the band to 26–30%. Phase A is a retune anyway; decide it
@@ -235,12 +318,71 @@ In rough confidence order:
    > two-strike counts feel hopeless, which is a feel question, not a
    > band question.
 
+   > **Decided (rev 3): widen to 22–28%.** Owner's call, reviewer's
+   > recommendation. Note that Phase A moves this band for free in the
+   > right direction anyway: with the check swing in, the sim policy's
+   > strikeout rate falls from 27.3% to 26.3% before any two-strike
+   > modifier is touched. Update §7 in `GAME_DESIGN.md` and the band table
+   > in `tune.ts` as part of Phase A, and record the change in
+   > `TUNING.md` alongside the reason, so the next reader does not
+   > re-litigate it.
+
 5. **Put a slugging-aware number on the season screen.** OPS at minimum,
    and make it the default sort. If AVG is the only number the player
    reads, AVG is the only thing they will optimise, whatever the tables
-   say.
+   say. Rev 3: this needs a SLG column added, not just a derived one —
+   `SeasonScreen.tsx` does not currently compute slugging at all.
+
+### 0.7 The recommended Phase A package (rev 3)
+
+Everything above, measured together. 60,000 PA per line,
+`npm run probe experiment`. "Rating value" is what a rating is worth
+across its whole 20–80 range under the reading policy; "spread" is the
+most valuable rating over the least.
+
+| Variant | Contact | Power | Eye | spread |
+|---|---|---|---|---|
+| committed engine | +0.087 | +0.091 | +0.012 | **7.6×** |
+| challenge on Power, 0.50 | +0.141 | +0.053 | +0.011 | 12.8× |
+| challenge on Power, 0.30 | +0.141 | +0.064 | +0.011 | 12.8× |
+| challenge on threat, 0.35 | +0.123 | +0.083 | +0.008 | 15.4× |
+| `CHALLENGE_WEIGHT` 0.25 | +0.112 | +0.090 | +0.011 | 10.2× |
+| check swing alone | +0.100 | +0.092 | +0.057 | 1.8× |
+| **0.25 + check swing** | **+0.120** | **+0.099** | **+0.053** | **2.3×** |
+
+The recommendation is the last row: `CHALLENGE_WEIGHT` 0.50 → 0.25, plus
+a check swing at `0.15 + adj(Eye) * 0.50`. Together they take the rating
+spread from 7.6× to 2.3× and make the Contact rating monotonic in batting
+average (.232 / .267 / .295 across Contact 20 / 50 / 80 under the sim
+policy, against .250 / .256 / .243 today).
+
+What the package does to the league, to brief the retune:
+
+| | committed | package |
+|---|---|---|
+| sim policy run value | 0.312 | 0.328 |
+| sim policy strikeout rate | 27.3% | 26.3% |
+| always-Contact vs sim | 104.8% | 103.7% |
+| reading policy vs sim | 107.4% | 107.6% |
+| always-Take run value | 0.157 | 0.156 |
+
+Offense rises about 5% and strikeouts fall a point, both of which the
+retune absorbs and both of which move toward the bands rather than away.
+The policy ratios barely move, so the §7.1 matrix should survive — but
+that is a prediction from a no-bases model and the 10,000 × two-seed run
+is what settles it.
+
+**Two things this package does not do.** It does not touch the §0.1
+symptom directly: always-Contact still hits .321 and still beats the sim.
+That is the right order of operations — fix what the ratings mean first,
+then re-measure the symptom, per the reviewer's §0 note — but Phase A is
+not finished until always-Contact has been re-measured against a season
+screen that shows SLG. And it does not address the two-strike read, which
+cutting the challenge weight can re-open; that check comes first in the
+retune, not last.
 
 ---
+
 
 ## 1. Two constraints set the order
 
@@ -273,6 +415,15 @@ replaying.~~
 > or a test proving the old envelope still loads**, and tuning
 > reproducibility (`TUNING.md` seeds) is re-established per phase, which
 > the retune does anyway.
+
+> Verified (rev 3): the reviewer is right and the original constraint was
+> wrong. Every `makeRng` call on the app path is seeded from a stored
+> position — `App.tsx:106`, `170` and `228` from `rngState`,
+> `season.ts:437` and `660` likewise. The only seed-from-scratch call is
+> `inning.ts:545` in `createGame`, which is a new game. Nothing replays a
+> game forward from its original seed, so a new draw cannot invalidate a
+> save. The replacement constraint above is the one that holds, and
+> Phase E's position no longer rests on this.
 
 ---
 
@@ -387,6 +538,14 @@ there).
 > written below. Build it only if D1 gets played more than once, and keep
 > it opt-in per game for the tap-budget reason the draft already gives.
 
+> **Decided (rev 3): split, and versioned.** D1 ships in **1.0.0**; D2 is
+> **1.1 or later**, gated on D1 actually being played. One consequence to
+> plan for: D1's three approaches are a modifier on `p_zone` and the whiff
+> term, which means D1 needs the §7 bands re-measured with a non-neutral
+> approach selected — a player who picks Nibble every half-inning is a
+> new policy row, and the §7.1 matrix should gain one. Cheap, but it is
+> a retune, so D1 is a phase and not a patch.
+
 Two calls to make when you get here, both flagged in `FUTURE_FEATURES.md`:
 
 - **Opt in per game, at least at first.** §7 targets 16–18 taps per
@@ -431,6 +590,28 @@ Two things to decide before writing any of it:
 > opponent progression model; it keeps the §7 bands describing the league
 > by construction, because the ladder is a rating offset the tuning can
 > be re-run at.
+
+> **Decided (rev 3): the reviewer's offseason choices are the 1.x step,
+> but career mode stays on the roadmap as a later release.** The owner's
+> position: the reviewer's version is the right way to *find out* whether
+> season-over-season play is fun before committing to the heavier thing,
+> and the heavier thing — the career mode scoped before this document
+> existed — remains wanted, provisionally as **2.0.0**. What is ruled out
+> at every version is the simulation tier below that: no minor leagues,
+> no contracts, no money. That level of management is more than the
+> between-meetings premise can carry.
+>
+> Practical consequence for the 1.x design: build the offseason so the
+> career version is an extension of it rather than a replacement. That
+> means persisting a roster with per-player career totals from the first
+> offseason, even though the 1.x offseason only needs this season's
+> line — the ledger in §3 is the same data. It costs a wider schema now
+> and saves a migration and a rewrite later.
+>
+> One interaction to watch: the +5 promotion and the §3 difficulty
+> ladder's +2 to every opponent are the player's and the league's growth
+> rates, and they have to be tuned against each other or the player
+> outruns the league in four seasons. They are one decision, not two.
 
 Phase E should ship *after* the season-over summary and the franchise
 ledger (§3 below), because a career needs somewhere to be displayed
@@ -494,6 +675,18 @@ the harness at a small N (about 2,000 games) and fails if any §7 band or
 from drifting the game between retunes. This is the "capture repeatable
 behaviour in deterministic code" version of the retune discipline.
 
+> Measured (rev 3): N = 2,000 runs in **40 seconds** and is more stable
+> than `TUNING.md`'s warning suggests — that warning is about 1,000-game
+> runs. Measured against the committed 10,000-game figures, the matrix
+> rows at N = 2,000 come in at 56.4 / 96.8 / 104.2 / 95.4 / 111.5 against
+> 57.6 / 97.7 / 103.1 / 95.4 / 110.6: **every row within 1.2 points**, and
+> the band table within a hundredth on every row. So: run it at N = 3,000
+> (about a minute), guard the band table tightly and the matrix rows at
+> ±5 points, and keep the 10,000 × two-seed run as the thing that moves a
+> band. Size the guards off a recorded baseline in the test file, not off
+> the §7 bands, so the test catches *drift* rather than re-asserting what
+> `tune.ts` already checks.
+
 **A difficulty ladder — with the season-over summary, instead of opponent
 progression (rev 2).** Each new season, if the player won the pennant,
 every opponent's ratings rise by 2, capped at 70; otherwise unchanged.
@@ -515,10 +708,12 @@ availability inside a short window, not a health model.
 
 ---
 
-## 5. Open questions for the owner
+## 5. The four questions, answered
 
-Ordered by how much they change the plan. Each carries the reviewer's
-recommended answer (rev 2); the decision is the owner's.
+All four are **decided as of rev 3**; the answers are folded into §0–§4
+above and repeated here with the reasoning that produced them. Kept as
+questions rather than rewritten as statements so the next reader can see
+what was traded away.
 
 1. **Is a .300-hitting team the bug, or the fantasy the game is selling?**
    Phase A can make the visible stats honest (batting average tracks run
@@ -532,11 +727,21 @@ recommended answer (rev 2); the decision is the owner's.
    > scores more, that is the right game. A .300 team is fine when it is
    > earned by a good roster rather than by one button.
 
+   > **Decided (rev 3): balance the options, do not raise the difficulty.**
+   > The reviewer's framing, with one substitution the measurement forces:
+   > the challenge term moves off 0.50 by being *reduced*, not by being
+   > hung on Power — that was tested and inverts the Power rating instead
+   > (§0.4). Check swing and OPS on screen are in as proposed. The success
+   > test for Phase A is §0.7's spread row reaching roughly 2×, not the
+   > team average reaching any particular number.
+
 2. **The strikeout band: meet it, or widen it to 26–30%?** `TUNING.md`
    frames it as a genuine fork. Phase A is the cheapest place to settle
    it.
 
    > Reviewer: widen, to 22–28%. See §0.6 item 4.
+
+   > **Decided (rev 3): widen to 22–28%.** See §0.6 item 4.
 
 3. **Does Phase D's pitching half replace the simulated half, or sit
    beside it as an option?** This changes whether Phase D is a feature or
@@ -545,6 +750,9 @@ recommended answer (rev 2); the decision is the owner's.
    > Reviewer: beside it, opt-in, and only after D1 (one decision per
    > half-inning) has been played. D1 may be all the pitching half the
    > game needs.
+
+   > **Decided (rev 3): split. D1 in 1.0.0, D2 in 1.1 or later.** See
+   > Phase D.
 
 4. **Is "franchise" in scope at all?** Progression without a persistent
    roster across seasons is a stat that gets thrown away. If the answer is
@@ -555,3 +763,11 @@ recommended answer (rev 2); the decision is the owner's.
    > choices in Phase E and a ledger. No contracts, no money, no minors.
    > If that still sounds like too much, the difficulty ladder alone gives
    > seasons a shape and costs almost nothing.
+
+   > **Decided (rev 3): yes, in two steps.** The reviewer's version is
+   > 1.x and is how we find out whether season-over-season play is fun.
+   > The fuller career mode stays on the roadmap, provisionally 2.0.0.
+   > Minor leagues, contracts and money are ruled out at every version.
+   > See Phase E for the schema consequence — persist career totals from
+   > the first offseason, so 2.0 extends the 1.x data instead of
+   > replacing it.

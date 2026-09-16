@@ -20,9 +20,9 @@
  * Like `tune.ts` this is a measurement tool. It never writes constants.
  */
 
-import { makeRng } from '../src/engine/rng'
+import { makeRng, rngBool } from '../src/engine/rng'
 import type { Rng } from '../src/engine/rng'
-import { adj, preparePitch, resolvePitch, displayedRead } from '../src/engine/pitch'
+import { adj, preparePitch, resolvePitch, displayedRead, rollLocation, resolveSwing, resolveBattedBall } from '../src/engine/pitch'
 import { opponentChoice } from '../src/engine/sim'
 import { HERONS_BATTERS } from '../src/engine/content/roster'
 import { OPPONENTS } from '../src/engine/content/opponents'
@@ -96,17 +96,112 @@ function tendencyMod(pitcher: Pitcher): number {
   }
 }
 
+// ============================================================================
+// Engine variants
+// ============================================================================
+
 /**
- * `zoneProbability` with CHALLENGE_WEIGHT passed in rather than imported,
- * so the `challenge` mode can sweep it without editing constants.ts.
- * Kept identical to pitch.ts in every other term; if that formula changes,
- * this has to change with it.
+ * A candidate rule change, applied on top of the committed engine so it can
+ * be measured before anything in `src/engine/` moves. `BASELINE` reproduces
+ * the committed engine exactly and delegates to `pitch.ts`; every other
+ * variant recomputes the affected step here.
+ *
+ * This is the one place the probe duplicates engine logic. If §3.2's p_zone
+ * formula or `resolvePitch`'s draw order changes, `zoneProbabilityFor` and
+ * `resolveWithVariant` have to change with them, or the variants stop being
+ * comparable with the baseline.
  */
-function zoneProbabilityWith(weight: number, count: Count, batter: Batter, pitcher: Pitcher): number {
+export interface Variant {
+  label: string
+  /**
+   * Which rating the §3.2 challenge term hangs on. `threat` is the mean of
+   * Contact and Power: the pitcher works around a dangerous hitter rather
+   * than a particular kind of dangerous hitter, which splits the term's
+   * walk-conversion side effect across both ratings instead of loading it
+   * onto one.
+   */
+  challengeOn: 'contact' | 'power' | 'threat'
+  /** The §3.2 challenge weight. */
+  challengeWeight: number
+  /**
+   * Check swing. On a swing at a pitch out of the zone, the batter holds up
+   * with probability `checkSwingBase + adj(Eye) * checkSwingEyeWeight` and
+   * the pitch is a ball. Zero base and zero weight disables it.
+   */
+  checkSwingBase: number
+  checkSwingEyeWeight: number
+}
+
+const BASELINE: Variant = {
+  label: 'baseline (committed)',
+  challengeOn: 'contact',
+  challengeWeight: CHALLENGE_WEIGHT,
+  checkSwingBase: 0,
+  checkSwingEyeWeight: 0
+}
+
+function isBaseline(v: Variant): boolean {
+  return v.challengeOn === 'contact' && v.challengeWeight === CHALLENGE_WEIGHT && v.checkSwingBase === 0 && v.checkSwingEyeWeight === 0
+}
+
+/**
+ * `zoneProbability` with the challenge term's rating and weight supplied,
+ * so a variant can sweep either without editing constants.ts. Identical to
+ * pitch.ts in every other term.
+ */
+function zoneProbabilityFor(variant: Variant, count: Count, batter: Batter, pitcher: Pitcher): number {
   const countMod = COUNT_MOD[`${count.balls}-${count.strikes}`] ?? 0
+  const challengeRating =
+    variant.challengeOn === 'contact'
+      ? batter.contact
+      : variant.challengeOn === 'power'
+        ? batter.power
+        : (batter.contact + batter.power) / 2
   const raw =
-    BASE_ZONE_PROBABILITY + countMod + adj(pitcher.control) + tendencyMod(pitcher) - adj(batter.contact) * weight
+    BASE_ZONE_PROBABILITY + countMod + adj(pitcher.control) + tendencyMod(pitcher) - adj(challengeRating) * variant.challengeWeight
   return Math.min(ZONE_CLAMP_MAX, Math.max(ZONE_CLAMP_MIN, raw))
+}
+
+/** The probability a check swing is held up, for this batter under this variant. */
+function checkSwingProbability(variant: Variant, batter: Batter): number {
+  return Math.min(1, Math.max(0, variant.checkSwingBase + adj(batter.eye) * variant.checkSwingEyeWeight))
+}
+
+/**
+ * `resolvePitch` with the check-swing step inserted. Draw order matches
+ * `resolvePitch` exactly (location, then swing, then batted ball) with the
+ * check-swing roll between location and swing, so a variant with check
+ * swing disabled is the committed engine.
+ */
+function resolveWithVariant(
+  variant: Variant,
+  choice: Choice,
+  pZone: number,
+  batter: Batter,
+  pitcher: Pitcher,
+  rng: Rng
+): ReturnType<typeof resolvePitch> {
+  if (variant.checkSwingBase === 0 && variant.checkSwingEyeWeight === 0) {
+    return resolvePitch(choice, pZone, batter, pitcher, rng)
+  }
+
+  const location = rollLocation(pZone, rng)
+
+  // No bases here, so `isBuntAvailable` is never true and no policy bunts.
+  if (choice === 'Bunt') throw new Error('resolveWithVariant: Bunt is unreachable without bases.')
+
+  if (choice === 'Take') {
+    return { location, result: location === 'zone' ? { kind: 'called-strike' } : { kind: 'ball' } }
+  }
+
+  if (location === 'ball' && rngBool(rng, checkSwingProbability(variant, batter))) {
+    return { location, result: { kind: 'ball' } }
+  }
+
+  const swing = resolveSwing(choice, location, batter, pitcher, rng)
+  if (swing === 'whiff') return { location, result: { kind: 'whiff' } }
+  if (swing === 'foul') return { location, result: { kind: 'foul' } }
+  return { location, result: { kind: 'in-play', batted: resolveBattedBall(choice, location, batter, rng) } }
 }
 
 /** Play one plate appearance to a terminal event. Bunt is never offered (no bases). */
@@ -115,23 +210,23 @@ function playPlateAppearance(
   pitcher: Pitcher,
   policy: Policy,
   rng: Rng,
-  challengeWeight: number | null
+  variant: Variant
 ): { event: Ev; pitches: number } {
   const count: Count = { balls: 0, strikes: 0 }
 
   for (let pitches = 1; pitches <= MAX_PITCHES_PER_PA; pitches++) {
     let pZone: number
     let read: ReadBucket
-    if (challengeWeight === null) {
+    if (isBaseline(variant)) {
       const preview = preparePitch(count, batter, pitcher, rng)
       pZone = preview.pZone
       read = preview.displayedBucket
     } else {
-      pZone = zoneProbabilityWith(challengeWeight, count, batter, pitcher)
+      pZone = zoneProbabilityFor(variant, count, batter, pitcher)
       read = displayedRead(pZone, batter, rng)
     }
 
-    const resolution = resolvePitch(policy(read, count, rng), pZone, batter, pitcher, rng)
+    const resolution = resolveWithVariant(variant, policy(read, count, rng), pZone, batter, pitcher, rng)
     const kind = resolution.result.kind
 
     if (kind === 'called-strike' || kind === 'whiff') {
@@ -169,7 +264,7 @@ interface Line {
 
 const PITCHER_POOL: Pitcher[] = OPPONENTS.flatMap((team) => team.pitchers)
 
-function measure(batter: Batter, policy: Policy, paCount: number, seed: number, challengeWeight: number | null = null): Line {
+function measure(batter: Batter, policy: Policy, paCount: number, seed: number, variant: Variant = BASELINE): Line {
   const rng = makeRng(seed)
   let pa = 0
   let ab = 0
@@ -182,7 +277,7 @@ function measure(batter: Batter, policy: Policy, paCount: number, seed: number, 
   let pitches = 0
 
   for (let i = 0; i < paCount; i++) {
-    const { event, pitches: p } = playPlateAppearance(batter, PITCHER_POOL[i % PITCHER_POOL.length], policy, rng, challengeWeight)
+    const { event, pitches: p } = playPlateAppearance(batter, PITCHER_POOL[i % PITCHER_POOL.length], policy, rng, variant)
     pa += 1
     pitches += p
     runValue += LINEAR_WEIGHTS[event]
@@ -290,10 +385,75 @@ function modeChallenge(paCount: number, baseSeed: number): void {
     console.log(`  CHALLENGE_WEIGHT ${weight.toFixed(2)}`)
     console.log(`  Contact  ${HEADER}`)
     for (const contact of [20, 35, 50, 65, 80]) {
-      const l = measure(batterOf(contact, 50, 50), SIM_POLICY, paCount, seedFor(baseSeed, contact, weight), weight)
+      const variant: Variant = { ...BASELINE, label: `cw ${weight}`, challengeWeight: weight }
+      const l = measure(batterOf(contact, 50, 50), SIM_POLICY, paCount, seedFor(baseSeed, contact, weight), variant)
       console.log(`  ${String(contact).padStart(7)}  ${lineOf(l)}`)
     }
     console.log()
+  }
+}
+
+
+/**
+ * The rev-2 Phase A candidates, measured against the committed engine
+ * before anything in `src/engine/` moves. Each variant is scored on the
+ * three questions Phase A has to answer at once:
+ *
+ *   - does each rating buy a comparable amount (the §0.3 defect)?
+ *   - does the Contact rating raise batting average (the §0.4 inversion)?
+ *   - does always-Contact still beat the reading policy on the stats the
+ *     season screen shows (the §0.1 symptom)?
+ *
+ * A candidate that fixes one of these by breaking another is not a fix.
+ */
+const VARIANTS: Variant[] = [
+  BASELINE,
+  { label: 'challenge on Power, weight 0.50', challengeOn: 'power', challengeWeight: 0.5, checkSwingBase: 0, checkSwingEyeWeight: 0 },
+  { label: 'challenge on Power, weight 0.30', challengeOn: 'power', challengeWeight: 0.3, checkSwingBase: 0, checkSwingEyeWeight: 0 },
+  { label: 'challenge on Contact, weight 0.25', challengeOn: 'contact', challengeWeight: 0.25, checkSwingBase: 0, checkSwingEyeWeight: 0 },
+  { label: 'check swing 0.15 + adj(Eye)*0.50', challengeOn: 'contact', challengeWeight: CHALLENGE_WEIGHT, checkSwingBase: 0.15, checkSwingEyeWeight: 0.5 },
+  { label: 'check swing 0.10 + adj(Eye)*0.25', challengeOn: 'contact', challengeWeight: CHALLENGE_WEIGHT, checkSwingBase: 0.1, checkSwingEyeWeight: 0.25 },
+  { label: 'challenge on threat (C+P)/2, weight 0.50', challengeOn: 'threat', challengeWeight: 0.5, checkSwingBase: 0, checkSwingEyeWeight: 0 },
+  { label: 'challenge on threat (C+P)/2, weight 0.35', challengeOn: 'threat', challengeWeight: 0.35, checkSwingBase: 0, checkSwingEyeWeight: 0 },
+  { label: 'PACKAGE: challenge Contact 0.25 + check swing 0.15/0.50', challengeOn: 'contact', challengeWeight: 0.25, checkSwingBase: 0.15, checkSwingEyeWeight: 0.5 },
+  { label: 'PACKAGE: challenge threat 0.35 + check swing 0.15/0.50', challengeOn: 'threat', challengeWeight: 0.35, checkSwingBase: 0.15, checkSwingEyeWeight: 0.5 }
+]
+
+function modeExperiment(paCount: number, baseSeed: number): void {
+  for (const variant of VARIANTS) {
+    console.log(`\n===== ${variant.label} =====`)
+
+    console.log('\n  Rating value: one rating 20 -> 80, others at 50, reading policy')
+    console.log('  rating     AVG 20   AVG 80    run val 20   run val 80    delta')
+    for (const dimension of ['contact', 'power', 'eye'] as const) {
+      const at = (v: number) =>
+        measure(
+          batterOf(dimension === 'contact' ? v : 50, dimension === 'power' ? v : 50, dimension === 'eye' ? v : 50),
+          READING_POLICY,
+          paCount,
+          seedFor(baseSeed, v, dimension.length, variant.label.length),
+          variant
+        )
+      const lo = at(20)
+      const hi = at(80)
+      console.log(
+        `  ${dimension.padEnd(9)}   ${rate(lo.avg)}    ${rate(hi.avg)}       ${lo.runValue.toFixed(3)}        ${hi.runValue.toFixed(3)}    ${(hi.runValue - lo.runValue >= 0 ? '+' : '')}${(hi.runValue - lo.runValue).toFixed(3)}`
+      )
+    }
+
+    console.log('\n  Contact rating under the sim policy: does it raise average?')
+    console.log(`  Contact  ${HEADER}`)
+    for (const contact of [20, 50, 80]) {
+      const l = measure(batterOf(contact, 50, 50), SIM_POLICY, paCount, seedFor(baseSeed, contact, 3, variant.label.length), variant)
+      console.log(`  ${String(contact).padStart(7)}  ${lineOf(l)}`)
+    }
+
+    console.log('\n  Policies, 50/50/50 batter')
+    console.log(`  policy                  ${HEADER}`)
+    for (const [label, policy] of POLICIES) {
+      const l = measure(batterOf(50, 50, 50), policy, paCount, seedFor(baseSeed, label.length, 9, variant.label.length), variant)
+      console.log(`  ${label.padEnd(22)}  ${lineOf(l)}`)
+    }
   }
 }
 
@@ -304,7 +464,8 @@ function modeChallenge(paCount: number, baseSeed: number): void {
 const MODES: Record<string, (paCount: number, baseSeed: number) => void> = {
   policies: modePolicies,
   ratings: modeRatings,
-  challenge: modeChallenge
+  challenge: modeChallenge,
+  experiment: modeExperiment
 }
 
 const mode = process.argv[2] ?? 'policies'

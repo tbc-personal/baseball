@@ -143,3 +143,30 @@ npm run probe -- challenge 40000
 ```
 
 All three at the default base seed `20260401`.
+
+## Mode `experiment`
+
+Candidate rule changes, measured against the committed engine before
+anything in `src/engine/` moves. Each variant is a `Variant` record at the
+top of the modes section — which rating the §3.2 challenge term hangs on,
+at what weight, and whether a check swing is in play — and each is scored
+on the three questions Phase A has to answer at once: whether the three
+ratings are worth comparable amounts, whether the Contact rating raises
+batting average, and what the policies do.
+
+```
+npm run probe -- experiment 60000
+```
+
+This mode is the one place the probe duplicates engine logic:
+`zoneProbabilityFor` re-implements §3.2's `p_zone` so the challenge term's
+rating and weight can vary, and `resolveWithVariant` re-implements
+`resolvePitch`'s draw order so the check-swing roll can be inserted
+between the location roll and the swing. **If either of those engine
+functions changes, these two have to change with them**, or the variants
+stop being comparable with the baseline. The baseline variant delegates
+to `pitch.ts` directly rather than to the copies, so a divergence shows up
+as the baseline row disagreeing with `npm run probe ratings`.
+
+Results and the recommended package are in `docs/ROADMAP.md` §0.4, §0.6
+and §0.7.
