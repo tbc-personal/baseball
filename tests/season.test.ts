@@ -183,6 +183,9 @@ describe('accumulateStats', () => {
       runsScored: [],
       outsAdded: 1,
       halfInningEnded: false,
+      // null whenever the half-inning did not end: the engine only counts
+      // stranded runners on the pitch that clears the bases.
+      runnersLeftOnBase: null,
       gameEnded: false,
       play: null
     }
@@ -201,6 +204,7 @@ describe('accumulateStats', () => {
       runsScored: [scorerId],
       outsAdded: 0,
       halfInningEnded: false,
+      runnersLeftOnBase: null,
       gameEnded: false,
       play: null
     }
